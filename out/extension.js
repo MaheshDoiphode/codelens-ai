@@ -39,6 +39,8 @@ exports.deactivate = deactivate;
 const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
+// Store current code block documents
+let codeBlockDocuments = [];
 // This method is called when your extension is activated
 function activate(context) {
     // File storage
@@ -57,39 +59,49 @@ function activate(context) {
     // Register the tree view as a valid drop target
     context.subscriptions.push(treeView);
     context.subscriptions.push(treeView);
-    // Register the command to open the file integrator webview
-    context.subscriptions.push(vscode.commands.registerCommand('fileintegrator.openFileIntegrator', () => {
-        FileIntegratorPanel.createOrShow(context.extensionUri, fileStorage);
-    }));
     // Register command to remove a file
     context.subscriptions.push(vscode.commands.registerCommand('fileintegrator.removeFile', (item) => {
         fileStorage.removeFile(item.path);
         fileIntegratorProvider.refresh();
-        // Notify the webview that file list has been updated
-        if (FileIntegratorPanel.currentPanel) {
-            FileIntegratorPanel.currentPanel.updateFileList();
-        }
+        // Update any open code block document
+        updateCodeBlockDocuments(fileStorage.files);
     }));
     // Register command to generate code block
-    context.subscriptions.push(vscode.commands.registerCommand('fileintegrator.generateCodeBlock', () => {
+    context.subscriptions.push(vscode.commands.registerCommand('fileintegrator.generateCodeBlock', async () => {
         if (fileStorage.files.length === 0) {
             vscode.window.showInformationMessage('No files selected. Please drag and drop files first.');
             return;
         }
-        FileIntegratorPanel.createOrShow(context.extensionUri, fileStorage);
-        if (FileIntegratorPanel.currentPanel) {
-            FileIntegratorPanel.currentPanel.generateCodeBlock();
+        // Get only files with content (not directories)
+        const fileEntries = fileStorage.files.filter(file => !file.isDirectory && file.content);
+        if (fileEntries.length === 0) {
+            vscode.window.showInformationMessage('No files with content to display. Please add some files first.');
+            return;
+        }
+        // Create or show the code block document
+        const codeBlockDoc = await showCodeBlockDocument(fileEntries);
+        // Focus the document
+        if (codeBlockDoc) {
+            vscode.window.showTextDocument(codeBlockDoc, { preview: false });
         }
     }));
     // Register command to copy to clipboard
-    context.subscriptions.push(vscode.commands.registerCommand('fileintegrator.copyToClipboard', () => {
+    context.subscriptions.push(vscode.commands.registerCommand('fileintegrator.copyToClipboard', async () => {
         if (fileStorage.files.length === 0) {
             vscode.window.showInformationMessage('No files selected. Please drag and drop files first.');
             return;
         }
+        // Check if we have code block documents open
+        if (codeBlockDocuments.length > 0) {
+            // Get the content from the active code block document
+            const activeDoc = codeBlockDocuments[0]; // Get first code block document
+            const content = activeDoc.getText();
+            await vscode.env.clipboard.writeText(content);
+            vscode.window.showInformationMessage('Code block copied to clipboard!');
+            return;
+        }
+        // If no code block document is open, generate one from storage
         let codeBlock = '';
-        // Only process actual files (not directories) with content
-        // Make sure we're only getting files that exist in the current storage
         const fileEntries = fileStorage.files.filter(file => !file.isDirectory && file.content);
         if (fileEntries.length === 0) {
             vscode.window.showInformationMessage('No files with content to copy. Please add some files first.');
@@ -101,22 +113,22 @@ function activate(context) {
                 codeBlock += displayPath + "\n```\n" + file.content + "\n```\n\n";
             }
         });
-        vscode.env.clipboard.writeText(codeBlock);
+        await vscode.env.clipboard.writeText(codeBlock);
         vscode.window.showInformationMessage('Code block copied to clipboard!');
     }));
     // Register command to clear all files
     context.subscriptions.push(vscode.commands.registerCommand('fileintegrator.clearFiles', () => {
         fileStorage.clearFiles();
         fileIntegratorProvider.refresh();
-        // Notify the webview that all files have been cleared
-        if (FileIntegratorPanel.currentPanel) {
-            FileIntegratorPanel.currentPanel.updateFileList();
-        }
+        // Close any open code block documents
+        closeCodeBlockDocuments();
         vscode.window.showInformationMessage('All files cleared.');
     }));
 }
 // This method is called when your extension is deactivated
 function deactivate() {
+    // Close all code block documents
+    closeCodeBlockDocuments();
 }
 // Helper function to get relative path
 function getDisplayPath(filePath) {
@@ -143,6 +155,87 @@ function getDisplayPath(filePath) {
         return parts.slice(-3).join('/');
     }
     return path.basename(filePath); // Fallback to just the filename
+}
+/**
+ * Shows or creates a code block document with contents from the files
+ */
+async function showCodeBlockDocument(files) {
+    // Generate the content
+    let content = '';
+    files.forEach(file => {
+        if (file.content) {
+            const displayPath = getDisplayPath(file.path);
+            content += displayPath + "\n```\n" + file.content + "\n```\n\n";
+        }
+    });
+    // Check if we already have a code block document open
+    if (codeBlockDocuments.length > 0) {
+        const doc = codeBlockDocuments[0];
+        // Create a WorkspaceEdit to update the document
+        const edit = new vscode.WorkspaceEdit();
+        edit.replace(doc.uri, new vscode.Range(0, 0, doc.lineCount, 0), content);
+        // Apply the edit
+        await vscode.workspace.applyEdit(edit);
+        return doc;
+    }
+    // Create a new untitled document
+    const doc = await vscode.workspace.openTextDocument({
+        content: content,
+        language: 'markdown'
+    });
+    // Add to our list of code block documents
+    codeBlockDocuments.push(doc);
+    // Set up document change handler
+    const changeDisposable = vscode.workspace.onDidCloseTextDocument(closedDoc => {
+        if (closedDoc === doc) {
+            // Remove from our list of code block documents
+            codeBlockDocuments = codeBlockDocuments.filter(d => d !== doc);
+            changeDisposable.dispose();
+        }
+    });
+    return doc;
+}
+/**
+ * Updates all open code block documents with the latest file content
+ */
+async function updateCodeBlockDocuments(files) {
+    if (codeBlockDocuments.length === 0) {
+        return;
+    }
+    // Generate the content
+    let content = '';
+    // Get only files with content (not directories)
+    const fileEntries = files.filter(file => !file.isDirectory && file.content);
+    fileEntries.forEach(file => {
+        if (file.content) {
+            const displayPath = getDisplayPath(file.path);
+            content += displayPath + "\n```\n" + file.content + "\n```\n\n";
+        }
+    });
+    // Update all code block documents
+    for (const doc of codeBlockDocuments) {
+        const edit = new vscode.WorkspaceEdit();
+        edit.replace(doc.uri, new vscode.Range(0, 0, doc.lineCount, 0), content);
+        await vscode.workspace.applyEdit(edit);
+    }
+}
+/**
+ * Closes all code block documents
+ */
+async function closeCodeBlockDocuments() {
+    // Create a copy of the array since we'll be modifying it during iteration
+    const docsToClose = [...codeBlockDocuments];
+    for (const doc of docsToClose) {
+        // Find all editors showing this document and close them
+        for (const editor of vscode.window.visibleTextEditors) {
+            if (editor.document === doc) {
+                await vscode.window.showTextDocument(editor.document, editor.viewColumn);
+                await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
+            }
+        }
+    }
+    // Clear the array
+    codeBlockDocuments = [];
 }
 /**
  * File storage class to manage files across views
@@ -350,6 +443,8 @@ class FileIntegratorProvider {
                     this.processPath(filesData);
                 }
                 this.refresh();
+                // Update any open code block documents with the new files
+                updateCodeBlockDocuments(this.fileStorage.files);
                 return Promise.resolve();
             });
         }
@@ -371,6 +466,8 @@ class FileIntegratorProvider {
                     }
                 }
                 this.refresh();
+                // Update any open code block documents with the new files
+                updateCodeBlockDocuments(this.fileStorage.files);
                 return Promise.resolve();
             });
         }
@@ -392,472 +489,6 @@ class FileIntegratorProvider {
         catch (err) {
             vscode.window.showErrorMessage(`Error processing path: ${err instanceof Error ? err.message : String(err)}`);
         }
-    }
-}
-/**
- * Manages the webview panel for the File Integrator
- */
-class FileIntegratorPanel {
-    static currentPanel;
-    _panel;
-    _extensionUri;
-    _disposables = [];
-    _fileStorage;
-    static createOrShow(extensionUri, fileStorage) {
-        const column = vscode.window.activeTextEditor
-            ? vscode.window.activeTextEditor.viewColumn
-            : undefined;
-        // If we already have a panel, show it
-        if (FileIntegratorPanel.currentPanel) {
-            FileIntegratorPanel.currentPanel._panel.reveal(column);
-            return;
-        }
-        // Otherwise, create a new panel
-        const panel = vscode.window.createWebviewPanel('fileIntegrator', 'File Integrator', column || vscode.ViewColumn.One, {
-            // Enable JavaScript in the webview
-            enableScripts: true,
-            // Restrict the webview to only load resources from the extension's directory
-            localResourceRoots: [extensionUri],
-            // Retain context when hidden
-            retainContextWhenHidden: true,
-        });
-        FileIntegratorPanel.currentPanel = new FileIntegratorPanel(panel, extensionUri, fileStorage);
-    }
-    constructor(panel, extensionUri, fileStorage) {
-        this._panel = panel;
-        this._extensionUri = extensionUri;
-        this._fileStorage = fileStorage;
-        // Set the webview's initial html content
-        this._update();
-        // Listen for when the panel is disposed
-        // This happens when the user closes the panel or when the panel is closed programmatically
-        this._panel.onDidDispose(() => this.dispose(), null, this._disposables);
-        // Update the content based on view changes
-        this._panel.onDidChangeViewState(() => {
-            if (this._panel.visible) {
-                this._update();
-            }
-        }, null, this._disposables);
-        // Handle messages from the webview
-        this._panel.webview.onDidReceiveMessage(async (message) => {
-            switch (message.command) {
-                case 'showInfo':
-                    vscode.window.showInformationMessage(message.text);
-                    break;
-                case 'copyToClipboard':
-                    // For copy to clipboard, we'll use the current fileStorage state
-                    // rather than whatever might be in the WebView
-                    if (this._fileStorage.files.length === 0) {
-                        vscode.window.showInformationMessage('No files selected. Please drag and drop files first.');
-                        return;
-                    }
-                    let codeBlock = '';
-                    // Only process actual files (not directories) with content
-                    const fileEntries = this._fileStorage.files.filter(file => !file.isDirectory && file.content);
-                    if (fileEntries.length === 0) {
-                        vscode.window.showInformationMessage('No files with content to copy.');
-                        return;
-                    }
-                    fileEntries.forEach(file => {
-                        if (file.content) {
-                            const displayPath = getDisplayPath(file.path);
-                            codeBlock += displayPath + "\n```\n" + file.content + "\n```\n\n";
-                        }
-                    });
-                    vscode.env.clipboard.writeText(codeBlock);
-                    vscode.window.showInformationMessage('Code block copied to clipboard!');
-                    break;
-                case 'removeFile':
-                    this._fileStorage.removeFile(message.filePath);
-                    // Update both the TreeView and the WebView
-                    vscode.commands.executeCommand('workbench.view.extension.fileIntegratorView');
-                    // Update the WebView with the latest files
-                    this.updateFileList();
-                    break;
-            }
-        }, null, this._disposables);
-    }
-    dispose() {
-        FileIntegratorPanel.currentPanel = undefined;
-        // Clean up our resources
-        this._panel.dispose();
-        while (this._disposables.length) {
-            const disposable = this._disposables.pop();
-            if (disposable) {
-                disposable.dispose();
-            }
-        }
-    }
-    generateCodeBlock() {
-        if (this._panel.visible) {
-            this._panel.webview.postMessage({ command: 'generateCodeBlock' });
-        }
-    }
-    // Add this method to update the file list in the WebView
-    updateFileList() {
-        if (this._panel.visible) {
-            this._panel.webview.postMessage({
-                command: 'fileListUpdated',
-                files: this._fileStorage.files
-            });
-        }
-    }
-    _update() {
-        const webview = this._panel.webview;
-        this._panel.title = 'File Integrator';
-        // Make sure we're using the latest file list
-        this._panel.webview.html = this._getHtmlForWebview(webview);
-        // Immediately after updating the HTML, send the latest file list
-        // This ensures the WebView always has the most current file data
-        this.updateFileList();
-    }
-    _getHtmlForWebview(webview) {
-        return `<!DOCTYPE html>
-    <html lang="en">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>File Integrator</title>
-      <style>
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
-          padding: 20px;
-          color: var(--vscode-foreground);
-          background-color: var(--vscode-editor-background);
-        }
-        .container {
-          display: flex;
-          flex-direction: column;
-          height: 100vh;
-        }
-        .file-list {
-          flex: 1;
-          overflow-y: auto;
-          border: 1px solid var(--vscode-panel-border);
-          border-radius: 5px;
-          padding: 10px;
-          margin-bottom: 20px;
-          background-color: var(--vscode-editor-background);
-        }
-        .file-item {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          padding: 8px;
-          border-bottom: 1px solid var(--vscode-panel-border);
-        }
-        .file-item:last-child {
-          border-bottom: none;
-        }
-        .file-path {
-          flex: 1;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          margin-right: 10px;
-        }
-        .directory {
-          font-weight: bold;
-          color: var(--vscode-symbolIcon-folderForeground);
-        }
-        .file {
-          color: var(--vscode-foreground);
-        }
-        .nested-files {
-          margin-left: 20px;
-          padding-left: 10px;
-          border-left: 1px solid var(--vscode-panel-border);
-        }
-        .remove-btn {
-          background-color: var(--vscode-button-secondaryBackground);
-          color: var(--vscode-button-secondaryForeground);
-          border: none;
-          border-radius: 3px;
-          padding: 4px 8px;
-          cursor: pointer;
-        }
-        .remove-btn:hover {
-          background-color: var(--vscode-button-secondaryHoverBackground);
-        }
-        .actions {
-          display: flex;
-          justify-content: space-between;
-          margin-top: 10px;
-        }
-        .btn {
-          background-color: var(--vscode-button-background);
-          color: var(--vscode-button-foreground);
-          border: none;
-          border-radius: 3px;
-          padding: 8px 16px;
-          cursor: pointer;
-        }
-        .btn:hover {
-          background-color: var(--vscode-button-hoverBackground);
-        }
-        .btn-secondary {
-          background-color: var(--vscode-button-secondaryBackground);
-          color: var(--vscode-button-secondaryForeground);
-        }
-        .btn-secondary:hover {
-          background-color: var(--vscode-button-secondaryHoverBackground);
-        }
-        .output {
-          margin-top: 20px;
-          border: 1px solid var(--vscode-panel-border);
-          border-radius: 5px;
-          padding: 10px;
-          white-space: pre-wrap;
-          font-family: monospace;
-          background-color: var(--vscode-editor-background);
-          max-height: 300px;
-          overflow-y: auto;
-        }
-        .hidden {
-          display: none;
-        }
-        .icon {
-          margin-right: 5px;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <h1>File Integrator</h1>
-        <p>Files and directories can be dragged and dropped into the File Integrator panel in the activity bar.</p>
-        
-        <h2>Selected Files</h2>
-        <div class="file-list" id="fileList">
-          <p id="emptyMessage">No files selected. Drag and drop files or directories to the File Integrator panel to add them.</p>
-        </div>
-        
-        <div class="actions">
-          <button class="btn" id="generateBtn">Generate Code Block</button>
-          <button class="btn btn-secondary" id="clearBtn">Clear All</button>
-        </div>
-        
-        <div class="output hidden" id="output"></div>
-      </div>
-      
-      <script>
-        (function() {
-          const vscode = acquireVsCodeApi();
-          const fileList = document.getElementById('fileList');
-          const emptyMessage = document.getElementById('emptyMessage');
-          const generateBtn = document.getElementById('generateBtn');
-          const clearBtn = document.getElementById('clearBtn');
-          const output = document.getElementById('output');
-          
-          // Files array from the extension
-          let files = ${JSON.stringify(this._fileStorage.files)};
-          
-          // Update file list when the webview is loaded
-          updateFileList();
-          
-          // Remove a file from the list
-          function removeFile(filePath) {
-            vscode.postMessage({
-              command: 'removeFile',
-              filePath: filePath
-            });
-            
-            // Also remove it locally for immediate UI update
-            const isDirectory = files.find(f => f.path === filePath)?.isDirectory || false;
-            
-            if (isDirectory) {
-              // Remove directory and all children
-              files = files.filter(f => !f.path.startsWith(filePath + '/') && 
-                                      !f.path.startsWith(filePath + '\\') && 
-                                      f.path !== filePath);
-            } else {
-              // Remove single file
-              files = files.filter(f => f.path !== filePath);
-            }
-            
-            updateFileList();
-            
-            // If we have the output displayed, update it too
-            if (!output.classList.contains('hidden')) {
-              generateCodeBlock();
-            }
-          }
-          
-          // Handle clearFiles command
-          clearBtn.addEventListener('click', () => {
-            vscode.postMessage({
-              command: 'clearFiles'
-            });
-            
-            // Also clear locally
-            files = [];
-            updateFileList();
-            
-            // Clear output if shown
-            output.classList.add('hidden');
-            output.textContent = '';
-            
-            // Remove copy button if exists
-            const copyBtn = document.getElementById('copyBtn');
-            if (copyBtn) {
-              copyBtn.remove();
-            }
-          });
-          
-          // Update the file list UI
-          function updateFileList() {
-            if (files.length === 0) {
-              emptyMessage.classList.remove('hidden');
-              fileList.innerHTML = '';
-              fileList.appendChild(emptyMessage);
-              return;
-            }
-            
-            emptyMessage.classList.add('hidden');
-            fileList.innerHTML = '';
-            
-            // Create a hierarchical structure
-            const rootItems = files.filter(file => !file.parent);
-            
-            // Render top-level items
-            rootItems.forEach(item => {
-              renderFileItem(item, fileList);
-            });
-          }
-          
-          // Render a single file/directory item
-          function renderFileItem(item, container) {
-            const fileItem = document.createElement('div');
-            fileItem.className = 'file-item';
-            
-            const filePathContainer = document.createElement('div');
-            filePathContainer.className = 'file-path ' + (item.isDirectory ? 'directory' : 'file');
-            
-            // Add icon
-            const icon = document.createElement('span');
-            icon.className = 'icon';
-            icon.innerHTML = item.isDirectory ? '📁' : '📄';
-            filePathContainer.appendChild(icon);
-            
-            // Display only the filename or directory name
-            const pathParts = item.path.split(/[\\\/]/);
-            filePathContainer.appendChild(document.createTextNode(pathParts[pathParts.length - 1]));
-            
-            // Add tooltip with full path
-            filePathContainer.title = item.path;
-            
-            fileItem.appendChild(filePathContainer);
-            
-            const removeBtn = document.createElement('button');
-            removeBtn.className = 'remove-btn';
-            removeBtn.textContent = 'Remove';
-            removeBtn.addEventListener('click', () => removeFile(item.path));
-            fileItem.appendChild(removeBtn);
-            
-            container.appendChild(fileItem);
-            
-            // If this is a directory, add its children
-            if (item.isDirectory) {
-              const childContainer = document.createElement('div');
-              childContainer.className = 'nested-files';
-              container.appendChild(childContainer);
-              
-              // Find all direct children
-              const children = files.filter(file => file.parent === item.path);
-              
-              if (children.length > 0) {
-                children.forEach(child => {
-                  renderFileItem(child, childContainer);
-                });
-              }
-            }
-          }
-          
-          // Generate the code block
-          function generateCodeBlock() {
-            if (files.length === 0) {
-              vscode.postMessage({
-                command: 'showInfo',
-                text: 'No files selected. Please drag and drop files first.'
-              });
-              return;
-            }
-            
-            let codeBlock = '';
-            
-            // Get only file entries (not directories) that still exist in the current files array
-            const fileEntries = files.filter(file => !file.isDirectory && file.content);
-            
-            fileEntries.forEach(file => {
-              if (file.content) {
-                // Use relative path for display
-                const displayPath = getDisplayPath(file.path);
-                codeBlock += displayPath + "\n\`\`\`\n" + file.content + "\n\`\`\`\n\n";
-              }
-            });
-            
-            output.textContent = codeBlock;
-            output.classList.remove('hidden');
-            
-            // Add copy button
-            const copyBtn = document.createElement('button');
-            copyBtn.className = 'btn';
-            copyBtn.style.marginTop = '10px';
-            copyBtn.textContent = 'Copy to Clipboard';
-            copyBtn.addEventListener('click', () => {
-              vscode.postMessage({
-                command: 'copyToClipboard',
-                text: codeBlock
-              });
-            });
-            
-            // Remove previous copy button if exists
-            const existingCopyBtn = document.getElementById('copyBtn');
-            if (existingCopyBtn) {
-              existingCopyBtn.remove();
-            }
-            
-            copyBtn.id = 'copyBtn';
-            output.parentNode.insertBefore(copyBtn, output.nextSibling);
-          }
-          
-          // Get a more user-friendly display path
-          function getDisplayPath(filePath) {
-            // Look for project pattern in path
-            const projectMatch = filePath.match(/(?:\/|\\)([\w-]+\/[\w-]+\/[\w.-]+)$/);
-            if (projectMatch && projectMatch[1]) {
-              return projectMatch[1].replace(/\\/g, '/');
-            }
-            
-            // Extract just the last two directory names and the filename
-            const parts = filePath.split(/[\\\/]/);
-            if (parts.length > 3) {
-              return parts.slice(-3).join('/');
-            }
-            
-            return parts[parts.length - 1]; // Just filename as fallback
-          }
-          
-          // Listen for messages from the extension
-          window.addEventListener('message', event => {
-            const message = event.data;
-            switch (message.command) {
-              case 'generateCodeBlock':
-                generateCodeBlock();
-                break;
-              case 'fileListUpdated':
-                // Update our local file list when the extension updates it
-                files = message.files || [];
-                updateFileList();
-                break;
-            }
-          });
-          
-          // Set up event listeners
-          generateBtn.addEventListener('click', generateCodeBlock);
-        })();
-      </script>
-    </body>
-    </html>`;
     }
 }
 //# sourceMappingURL=extension.js.map

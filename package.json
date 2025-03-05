@@ -2,7 +2,7 @@
   "name": "fileintegrator",
   "displayName": "fileintegrator",
   "description": "VS Code extension for drag and drop file integration",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -14,20 +14,19 @@
   "contributes": {
     "commands": [
       {
-        "command": "fileintegrator.openFileIntegrator",
-        "title": "Open File Integrator"
-      },
-      {
         "command": "fileintegrator.generateCodeBlock",
-        "title": "Generate Code Block"
+        "title": "Generate Code Block",
+        "icon": "$(markdown)"
       },
       {
         "command": "fileintegrator.copyToClipboard",
-        "title": "Copy Code Block to Clipboard"
+        "title": "Copy Code Block to Clipboard",
+        "icon": "$(copy)"
       },
       {
         "command": "fileintegrator.clearFiles",
-        "title": "Clear All Files"
+        "title": "Clear All Files",
+        "icon": "$(clear-all)"
       },
       {
         "command": "fileintegrator.removeFile",
