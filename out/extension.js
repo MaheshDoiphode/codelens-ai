@@ -37,6 +37,7 @@ exports.activate = activate;
 exports.deactivate = deactivate;
 // The module 'vscode' contains the VS Code extensibility API
 const vscode = __importStar(require("vscode"));
+const path = __importStar(require("path"));
 const fs = __importStar(require("fs"));
 // This method is called when your extension is activated
 function activate(context) {
@@ -45,12 +46,19 @@ function activate(context) {
     const fileStorage = new FileStorage();
     // Create the tree data provider for the view
     const fileIntegratorProvider = new FileIntegratorProvider(fileStorage);
-    // Register the tree data provider
+    // Register the tree data provider with drag and drop support
+    context.subscriptions.push(vscode.window.registerTreeDataProvider('fileIntegratorView', fileIntegratorProvider));
+    // Then create the tree view
     const treeView = vscode.window.createTreeView('fileIntegratorView', {
         treeDataProvider: fileIntegratorProvider,
         dragAndDropController: fileIntegratorProvider,
-        showCollapseAll: false,
+        showCollapseAll: true,
+        canSelectMany: true, // Allow multiple selection
     });
+    // Register the tree view as a valid drop target
+    context.subscriptions.push(treeView);
+    // Log when the extension is activated
+    console.log('File Integrator extension is now active with drag and drop support!');
     context.subscriptions.push(treeView);
     // Register the command to open the file integrator webview
     context.subscriptions.push(vscode.commands.registerCommand('fileintegrator.openFileIntegrator', () => {
@@ -110,7 +118,18 @@ function getDisplayPath(filePath) {
             }
         }
     }
-    return filePath;
+    // If not in workspace, try to extract project-relevant part of the path
+    // Look for 'vscodedragger/fileintegrator' or similar pattern in the path
+    const projectMatch = filePath.match(/(?:\/|\\)([\w-]+\/[\w-]+\/[\w.-]+)$/);
+    if (projectMatch && projectMatch[1]) {
+        return projectMatch[1].replace(/\\/g, '/'); // Normalize to forward slashes
+    }
+    // Extract just the last two directory names and the filename
+    const parts = filePath.split(/[\\\/]/);
+    if (parts.length > 3) {
+        return parts.slice(-3).join('/');
+    }
+    return path.basename(filePath); // Fallback to just the filename
 }
 /**
  * File storage class to manage files across views
@@ -120,12 +139,18 @@ class FileStorage {
     get files() {
         return this._files;
     }
+    // Get only the files (not directories)
+    get filesOnly() {
+        return this._files.filter(f => !f.isDirectory).map(f => ({ path: f.path, content: f.content }));
+    }
+    // Add a file to storage
     addFile(filePath) {
         // Check if file already exists in the list
         if (!this._files.some(f => f.path === filePath)) {
             this._files.push({
                 path: filePath,
-                content: null
+                content: null,
+                isDirectory: false
             });
             // Load file content
             try {
@@ -140,10 +165,70 @@ class FileStorage {
             }
         }
     }
+    // Add a directory and all its files
+    addDirectory(dirPath) {
+        // Check if directory already exists
+        if (this._files.some(f => f.path === dirPath && f.isDirectory)) {
+            return; // Directory already added
+        }
+        // Add the directory itself
+        this._files.push({
+            path: dirPath,
+            content: null,
+            isDirectory: true
+        });
+        // Read directory contents
+        try {
+            const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+            // Process each entry
+            for (const entry of entries) {
+                const fullPath = path.join(dirPath, entry.name);
+                if (entry.isDirectory()) {
+                    // Recursively add subdirectories
+                    this.addDirectory(fullPath);
+                }
+                else if (entry.isFile()) {
+                    // Add file with parent reference
+                    this._files.push({
+                        path: fullPath,
+                        content: null,
+                        isDirectory: false,
+                        parent: dirPath
+                    });
+                    // Load file content
+                    try {
+                        const content = fs.readFileSync(fullPath, 'utf8');
+                        const fileIndex = this._files.findIndex(f => f.path === fullPath);
+                        if (fileIndex !== -1) {
+                            this._files[fileIndex].content = content;
+                        }
+                    }
+                    catch (error) {
+                        console.error(`Error reading file ${fullPath}:`, error);
+                    }
+                }
+            }
+        }
+        catch (error) {
+            vscode.window.showErrorMessage(`Error reading directory ${dirPath}: ${error}`);
+        }
+    }
+    // Remove file or directory
     removeFile(filePath) {
-        const index = this._files.findIndex(f => f.path === filePath);
-        if (index !== -1) {
-            this._files.splice(index, 1);
+        const fileToRemove = this._files.find(f => f.path === filePath);
+        if (!fileToRemove) {
+            return;
+        }
+        if (fileToRemove.isDirectory) {
+            // Remove directory and all its children
+            this._files = this._files.filter(f => !f.path.startsWith(filePath + path.sep) && f.path !== filePath);
+        }
+        else {
+            // Remove individual file
+            const index = this._files.findIndex(f => f.path === filePath);
+            if (index !== -1) {
+                this._files.splice(index, 1);
+            }
         }
     }
     clearFiles() {
@@ -151,20 +236,34 @@ class FileStorage {
     }
 }
 /**
- * TreeItem representing a file in the view
+ * TreeItem representing a file or directory in the view
  */
 class FileItem extends vscode.TreeItem {
     path;
+    isDirectory;
     collapsibleState;
-    constructor(path, collapsibleState) {
+    parent;
+    constructor(path, isDirectory, collapsibleState, parent) {
         super(path, collapsibleState);
         this.path = path;
+        this.isDirectory = isDirectory;
         this.collapsibleState = collapsibleState;
-        this.tooltip = path;
-        this.label = path.split(/[\\/]/).pop() || path; // Display just filename
-        this.description = getDisplayPath(path);
-        this.contextValue = 'file';
-        this.iconPath = new vscode.ThemeIcon('file');
+        this.parent = parent;
+        // Set the appropriate label and icon
+        const basename = path.split(/[\\/]/).pop() || path;
+        this.label = basename;
+        if (isDirectory) {
+            this.tooltip = `Directory: ${path}`;
+            this.contextValue = 'directory';
+            this.iconPath = new vscode.ThemeIcon('folder');
+            this.description = getDisplayPath(path);
+        }
+        else {
+            this.tooltip = `File: ${path}`;
+            this.contextValue = 'file';
+            this.iconPath = new vscode.ThemeIcon('file');
+            this.description = getDisplayPath(path);
+        }
     }
 }
 /**
@@ -174,7 +273,7 @@ class FileIntegratorProvider {
     fileStorage;
     _onDidChangeTreeData = new vscode.EventEmitter();
     onDidChangeTreeData = this._onDidChangeTreeData.event;
-    // Drag and drop capabilities
+    // Restore original working dropMimeTypes
     dropMimeTypes = ['application/vnd.code.tree.fileIntegratorView', 'text/uri-list'];
     dragMimeTypes = ['text/uri-list'];
     constructor(fileStorage) {
@@ -184,12 +283,17 @@ class FileIntegratorProvider {
         return element;
     }
     getChildren(element) {
+        // If an element is provided, we're looking for its children
         if (element) {
-            return Promise.resolve([]);
+            // Return children of this directory
+            const directoryPath = element.path;
+            const children = this.fileStorage.files.filter(file => file.parent === directoryPath);
+            return Promise.resolve(children.map(file => new FileItem(file.path, file.isDirectory, file.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None, file.parent)));
         }
         else {
-            // Root of the tree, show all files
-            return Promise.resolve(this.fileStorage.files.map(file => new FileItem(file.path, vscode.TreeItemCollapsibleState.None)));
+            // Root level - show top-level items (files without parents and root directories)
+            const rootItems = this.fileStorage.files.filter(file => !file.parent);
+            return Promise.resolve(rootItems.map(file => new FileItem(file.path, file.isDirectory, file.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None)));
         }
     }
     refresh() {
@@ -197,38 +301,75 @@ class FileIntegratorProvider {
     }
     // Handle drop events on the tree view
     handleDrop(target, sources, token) {
-        const transferItem = sources.get('text/uri-list');
-        if (!transferItem) {
-            return Promise.resolve();
-        }
-        return transferItem.asString().then(uriList => {
-            const uris = uriList.split('\n').filter(Boolean).map(uri => uri.trim());
-            uris.forEach(uri => {
-                // Remove "file://" prefix and decode URI
-                let filePath = uri.replace(/^file:\/\//i, '');
-                // Handle URL encoding
+        console.log('Drop event received');
+        // Try both 'files' and 'text/uri-list' mime types
+        const filesItem = sources.get('files');
+        const uriListItem = sources.get('text/uri-list');
+        if (filesItem) {
+            return filesItem.asString().then(async (filesData) => {
+                console.log('Files data:', filesData);
                 try {
-                    filePath = decodeURIComponent(filePath);
+                    const files = JSON.parse(filesData);
+                    for (const file of files) {
+                        const filePath = file.fsPath || file;
+                        await this.processPath(filePath);
+                    }
                 }
-                catch (error) {
-                    console.error(`Failed to decode URI: ${filePath}`, error);
+                catch (err) {
+                    console.error('Error processing files data:', err);
+                    this.processPath(filesData);
                 }
-                // Handle Windows drive letter format (/C:/path/to/file)
-                if (process.platform === 'win32' && filePath.match(/^\/[A-Za-z]:/)) {
-                    filePath = filePath.slice(1);
-                }
-                // Check if the path exists and is a file
-                if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-                    this.fileStorage.addFile(filePath);
-                }
+                this.refresh();
+                return Promise.resolve();
             });
-            this.refresh();
-            return Promise.resolve();
-        });
+        }
+        else if (uriListItem) {
+            return uriListItem.asString().then(async (uriList) => {
+                console.log('URI List:', uriList);
+                const uris = uriList.split('\n').filter(Boolean).map(uri => uri.trim());
+                for (const uri of uris) {
+                    let filePath = uri.replace(/^file:\/\//i, '');
+                    try {
+                        filePath = decodeURIComponent(filePath);
+                        console.log('Processing file path:', filePath);
+                        // Handle Windows drive letter format (/C:/path/to/file)
+                        if (process.platform === 'win32' && filePath.match(/^\/[A-Za-z]:/)) {
+                            filePath = filePath.slice(1);
+                        }
+                        await this.processPath(filePath);
+                    }
+                    catch (err) {
+                        console.error(`Error processing URI: ${uri}`, err);
+                    }
+                }
+                this.refresh();
+                return Promise.resolve();
+            });
+        }
+        console.log('No valid data found in drop');
+        return Promise.resolve();
     }
-    // Handle drag from the tree view (not needed for this feature but required by interface)
-    handleDrag(source, dataTransfer, token) {
-        // Not implementing drag from tree view
+    // Helper method to process a file or directory path
+    async processPath(path) {
+        try {
+            if (fs.existsSync(path)) {
+                const stats = fs.statSync(path);
+                console.log(`Processing path: ${path}, isDirectory: ${stats.isDirectory()}`);
+                if (stats.isDirectory()) {
+                    this.fileStorage.addDirectory(path);
+                }
+                else if (stats.isFile()) {
+                    this.fileStorage.addFile(path);
+                }
+            }
+            else {
+                console.log('Path does not exist:', path);
+            }
+        }
+        catch (err) {
+            console.error('Error processing path:', path, err);
+            vscode.window.showErrorMessage(`Error processing path: ${err instanceof Error ? err.message : String(err)}`);
+        }
     }
 }
 /**
@@ -358,6 +499,18 @@ class FileIntegratorPanel {
           text-overflow: ellipsis;
           margin-right: 10px;
         }
+        .directory {
+          font-weight: bold;
+          color: var(--vscode-symbolIcon-folderForeground);
+        }
+        .file {
+          color: var(--vscode-foreground);
+        }
+        .nested-files {
+          margin-left: 20px;
+          padding-left: 10px;
+          border-left: 1px solid var(--vscode-panel-border);
+        }
         .remove-btn {
           background-color: var(--vscode-button-secondaryBackground);
           color: var(--vscode-button-secondaryForeground);
@@ -406,16 +559,19 @@ class FileIntegratorPanel {
         .hidden {
           display: none;
         }
+        .icon {
+          margin-right: 5px;
+        }
       </style>
     </head>
     <body>
       <div class="container">
         <h1>File Integrator</h1>
-        <p>Files can be dragged and dropped into the File Integrator panel in the activity bar.</p>
+        <p>Files and directories can be dragged and dropped into the File Integrator panel in the activity bar.</p>
         
         <h2>Selected Files</h2>
         <div class="file-list" id="fileList">
-          <p id="emptyMessage">No files selected. Drag and drop files to the File Integrator panel to add them.</p>
+          <p id="emptyMessage">No files selected. Drag and drop files or directories to the File Integrator panel to add them.</p>
         </div>
         
         <div class="actions">
@@ -455,27 +611,66 @@ class FileIntegratorPanel {
               emptyMessage.classList.remove('hidden');
               fileList.innerHTML = '';
               fileList.appendChild(emptyMessage);
-            } else {
-              emptyMessage.classList.add('hidden');
-              fileList.innerHTML = '';
+              return;
+            }
+            
+            emptyMessage.classList.add('hidden');
+            fileList.innerHTML = '';
+            
+            // Create a hierarchical structure
+            const rootItems = files.filter(file => !file.parent);
+            
+            // Render top-level items
+            rootItems.forEach(item => {
+              renderFileItem(item, fileList);
+            });
+          }
+          
+          // Render a single file/directory item
+          function renderFileItem(item, container) {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            
+            const filePathContainer = document.createElement('div');
+            filePathContainer.className = 'file-path ' + (item.isDirectory ? 'directory' : 'file');
+            
+            // Add icon
+            const icon = document.createElement('span');
+            icon.className = 'icon';
+            icon.innerHTML = item.isDirectory ? '📁' : '📄';
+            filePathContainer.appendChild(icon);
+            
+            // Display only the filename or directory name
+            const pathParts = item.path.split(/[\\\/]/);
+            filePathContainer.appendChild(document.createTextNode(pathParts[pathParts.length - 1]));
+            
+            // Add tooltip with full path
+            filePathContainer.title = item.path;
+            
+            fileItem.appendChild(filePathContainer);
+            
+            const removeBtn = document.createElement('button');
+            removeBtn.className = 'remove-btn';
+            removeBtn.textContent = 'Remove';
+            removeBtn.addEventListener('click', () => removeFile(item.path));
+            fileItem.appendChild(removeBtn);
+            
+            container.appendChild(fileItem);
+            
+            // If this is a directory, add its children
+            if (item.isDirectory) {
+              const childContainer = document.createElement('div');
+              childContainer.className = 'nested-files';
+              container.appendChild(childContainer);
               
-              files.forEach((file) => {
-                const fileItem = document.createElement('div');
-                fileItem.className = 'file-item';
-                
-                const filePath = document.createElement('div');
-                filePath.className = 'file-path';
-                filePath.textContent = file.path;
-                fileItem.appendChild(filePath);
-                
-                const removeBtn = document.createElement('button');
-                removeBtn.className = 'remove-btn';
-                removeBtn.textContent = 'Remove';
-                removeBtn.addEventListener('click', () => removeFile(file.path));
-                fileItem.appendChild(removeBtn);
-                
-                fileList.appendChild(fileItem);
-              });
+              // Find all direct children
+              const children = files.filter(file => file.parent === item.path);
+              
+              if (children.length > 0) {
+                children.forEach(child => {
+                  renderFileItem(child, childContainer);
+                });
+              }
             }
           }
           
@@ -491,12 +686,13 @@ class FileIntegratorPanel {
             
             let codeBlock = '';
             
-            files.forEach(file => {
+            // Get only file entries (not directories)
+            const fileEntries = files.filter(file => !file.isDirectory && file.content);
+            
+            fileEntries.forEach(file => {
               if (file.content) {
-                // Try to get workspace-relative path
-                let displayPath = file.path;
-                
-                // Get relative path logic will be handled by the extension
+                // Use relative path for display
+                const displayPath = getDisplayPath(file.path);
                 codeBlock += displayPath + "\n\`\`\`\n" + file.content + "\n\`\`\`\n\n";
               }
             });
@@ -524,6 +720,23 @@ class FileIntegratorPanel {
             
             copyBtn.id = 'copyBtn';
             output.parentNode.insertBefore(copyBtn, output.nextSibling);
+          }
+          
+          // Get a more user-friendly display path
+          function getDisplayPath(filePath) {
+            // Look for project pattern in path
+            const projectMatch = filePath.match(/(?:\/|\\)([\w-]+\/[\w-]+\/[\w.-]+)$/);
+            if (projectMatch && projectMatch[1]) {
+              return projectMatch[1].replace(/\\/g, '/');
+            }
+            
+            // Extract just the last two directory names and the filename
+            const parts = filePath.split(/[\\\/]/);
+            if (parts.length > 3) {
+              return parts.slice(-3).join('/');
+            }
+            
+            return parts[parts.length - 1]; // Just filename as fallback
           }
           
           // Listen for generate code block message
