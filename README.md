@@ -2,6 +2,22 @@
 
 This extension allows you to easily create markdown code blocks from multiple files by dragging and dropping them from your VS Code explorer.
 
+## Installation
+
+1. You can install this extension through the VS Code Marketplace:
+   - Open VS Code
+   - Go to Extensions (Ctrl+Shift+X)
+   - Search for "File Integrator"
+   - Click "Install"
+
+2. Alternatively, you can install the VSIX file directly:
+   - Download the latest `.vsix` file from the [releases page](https://github.com/MaheshDoiphode/vscode-file-integrator/releases)
+   - Open VS Code
+   - Go to Extensions (Ctrl+Shift+X)
+   - Click on the "..." menu (top-right of the Extensions panel)
+   - Select "Install from VSIX..."
+   - Navigate to the downloaded file and select it
+
 ## Features
 
 File Integrator simplifies the process of including code snippets from multiple files in documentation, discussions, or issue reports:
