@@ -1,18 +1,57 @@
 {
   "name": "fileintegrator",
-  "displayName": "fileintegrator",
-  "description": "VS Code extension for drag and drop file integration",
-  "version": "0.0.3",
+  "displayName": "File Integrator",
+  "description": "Integrates content from multiple files/directories via drag-and-drop sessions.",
+  "version": "0.0.4",
   "engines": {
     "vscode": "^1.97.0"
   },
   "categories": [
     "Other"
   ],
-  "activationEvents": ["onView:fileIntegratorView"],
+  "activationEvents": [
+    
+  ],
   "main": "./out/extension.js",
+  "dependencies": {
+    "fs-extra": "^11.2.0",
+    "uuid": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/fs-extra": "^11.0.4",
+    "@types/uuid": "^9.0.8",
+    "@types/vscode": "^1.97.0",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@typescript-eslint/eslint-plugin": "^8.25.0",
+    "@typescript-eslint/parser": "^8.25.0",
+    "eslint": "^9.21.0",
+    "typescript": "^5.7.3",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/test-electron": "^2.4.1"
+  },
   "contributes": {
     "commands": [
+      {
+        "command": "fileintegrator.addSession",
+        "title": "New Session",
+        "icon": "$(add)"
+      },
+      {
+        "command": "fileintegrator.removeSession",
+        "title": "Remove Session",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "fileintegrator.renameSession",
+        "title": "Rename Session",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "fileintegrator.clearSession",
+        "title": "Clear All Files from Session",
+        "icon": "$(clear-all)"
+      },
       {
         "command": "fileintegrator.generateCodeBlock",
         "title": "Generate Code Block",
@@ -24,15 +63,15 @@
         "icon": "$(copy)"
       },
       {
-        "command": "fileintegrator.clearFiles",
-        "title": "Clear All Files",
-        "icon": "$(clear-all)"
+        "command": "fileintegrator.removeFile",
+        "title": "Remove Item",
+        "icon": "$(close)"
       },
       {
-        "command": "fileintegrator.removeFile",
-        "title": "Remove File",
-        "icon": "$(close)"
-      }
+         "command": "fileintegrator.refreshView",
+         "title": "Refresh View",
+         "icon": "$(refresh)"
+       }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -47,36 +86,64 @@
       "file-integrator": [
         {
           "id": "fileIntegratorView",
-          "name": "Drop Files Here"
+          "name": "Integration Sessions"
         }
       ]
     },
     "menus": {
-      "view/item/context": [
-        {
-          "command": "fileintegrator.removeFile",
-          "when": "view == fileIntegratorView",
-          "group": "inline"
-        }
-      ],
-      "view/title": [
-        {
-          "command": "fileintegrator.generateCodeBlock",
-          "when": "view == fileIntegratorView",
-          "group": "navigation"
-        },
-        {
-          "command": "fileintegrator.copyToClipboard",
-          "when": "view == fileIntegratorView",
-          "group": "navigation"
-        },
-        {
-          "command": "fileintegrator.clearFiles",
-          "when": "view == fileIntegratorView",
-          "group": "navigation"
-        }
-      ]
+  "view/title": [
+    {
+      "command": "fileintegrator.addSession",
+      "when": "view == fileIntegratorView",
+      "group": "navigation@1"
+    },
+    {
+      "command": "fileintegrator.refreshView",
+      "when": "view == fileIntegratorView",
+      "group": "navigation@2"
     }
+  ],
+  "view/item/context": [
+    {
+      "command": "fileintegrator.generateCodeBlock",
+      "when": "view == fileIntegratorView && viewItem == session",
+      "group": "inline@1"
+    },
+    {
+      "command": "fileintegrator.copyToClipboard",
+      "when": "view == fileIntegratorView && viewItem == session",
+      "group": "inline@2"
+    },
+    {
+      "command": "fileintegrator.clearSession",
+      "when": "view == fileIntegratorView && viewItem == session",
+      "group": "inline@3" 
+    },
+
+    {
+      "command": "fileintegrator.renameSession",
+      "when": "view == fileIntegratorView && viewItem == session",
+      "group": "1_modification@1"
+    },
+    {
+      "command": "fileintegrator.removeSession",
+      "when": "view == fileIntegratorView && viewItem == session",
+      "group": "1_modification@2"
+    },
+    {
+      "command": "fileintegrator.removeFile",
+      "when": "view == fileIntegratorView && (viewItem == file || viewItem == directory)",
+      "group": "inline@1" 
+    },
+
+    {
+      "command": "vscode.open",
+      "when": "view == fileIntegratorView && viewItem == file",
+      "group": "navigation",
+      "args": ["{{resourceUri}}"]
+    }
+  ]
+}
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
@@ -85,16 +152,5 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test"
-  },
-  "devDependencies": {
-    "@types/vscode": "^1.97.0",
-    "@types/mocha": "^10.0.10",
-    "@types/node": "20.x",
-    "@typescript-eslint/eslint-plugin": "^8.25.0",
-    "@typescript-eslint/parser": "^8.25.0",
-    "eslint": "^9.21.0",
-    "typescript": "^5.7.3",
-    "@vscode/test-cli": "^0.0.10",
-    "@vscode/test-electron": "^2.4.1"
   }
 }

@@ -1,571 +1,298 @@
 // The module 'vscode' contains the VS Code extensibility API
 import * as vscode from 'vscode';
 import * as path from 'path';
-import * as fs from 'fs';
+// Use fs-extra for easier async operations and promises by default
+import * as fs from 'fs-extra';
+import { v4 as uuidv4 } from 'uuid'; // For unique session IDs
 
-// Store current code block documents
-let codeBlockDocuments: vscode.TextDocument[] = [];
+// --- Core Data Structures ---
 
-// This method is called when your extension is activated
-export function activate(context: vscode.ExtensionContext) {
-  // File storage
-  const fileStorage = new FileStorage();
-
-  // Create the tree data provider for the view
-  const fileIntegratorProvider = new FileIntegratorProvider(fileStorage);
-  
-  // Register the tree data provider with drag and drop support
-  context.subscriptions.push(
-    vscode.window.registerTreeDataProvider('fileIntegratorView', fileIntegratorProvider)
-  );
-
-  // Then create the tree view
-  const treeView = vscode.window.createTreeView('fileIntegratorView', { 
-    treeDataProvider: fileIntegratorProvider,
-    dragAndDropController: fileIntegratorProvider,
-    showCollapseAll: true,
-    canSelectMany: true,  // Allow multiple selection
-  });
-
-  // Register the tree view as a valid drop target
-  context.subscriptions.push(
-    treeView
-  );
-  
-  context.subscriptions.push(treeView);
-
-  // Register command to remove a file
-  context.subscriptions.push(
-    vscode.commands.registerCommand('fileintegrator.removeFile', (item: FileItem) => {
-      fileStorage.removeFile(item.path);
-      fileIntegratorProvider.refresh();
-      
-      // Update any open code block document
-      updateCodeBlockDocuments(fileStorage.files);
-    })
-  );
-
-  // Register command to generate code block
-  context.subscriptions.push(
-    vscode.commands.registerCommand('fileintegrator.generateCodeBlock', async () => {
-      if (fileStorage.files.length === 0) {
-        vscode.window.showInformationMessage('No files selected. Please drag and drop files first.');
-        return;
-      }
-
-      // Get only files with content (not directories)
-      const fileEntries = fileStorage.files.filter(file => !file.isDirectory && file.content);
-      
-      if (fileEntries.length === 0) {
-        vscode.window.showInformationMessage('No files with content to display. Please add some files first.');
-        return;
-      }
-
-      // Create or show the code block document
-      const codeBlockDoc = await showCodeBlockDocument(fileEntries);
-      
-      // Focus the document
-      if (codeBlockDoc) {
-        vscode.window.showTextDocument(codeBlockDoc, { preview: false });
-      }
-    })
-  );
-
-  // Register command to copy to clipboard
-  context.subscriptions.push(
-    vscode.commands.registerCommand('fileintegrator.copyToClipboard', async () => {
-      if (fileStorage.files.length === 0) {
-        vscode.window.showInformationMessage('No files selected. Please drag and drop files first.');
-        return;
-      }
-
-      // Check if we have code block documents open
-      if (codeBlockDocuments.length > 0) {
-        // Get the content from the active code block document
-        const activeDoc = codeBlockDocuments[0]; // Get first code block document
-        const content = activeDoc.getText();
-        await vscode.env.clipboard.writeText(content);
-        vscode.window.showInformationMessage('Code block copied to clipboard!');
-        return;
-      }
-
-      // If no code block document is open, generate one from storage
-      let codeBlock = '';
-      
-      const fileEntries = fileStorage.files.filter(file => !file.isDirectory && file.content);
-      
-      if (fileEntries.length === 0) {
-        vscode.window.showInformationMessage('No files with content to copy. Please add some files first.');
-        return;
-      }
-      
-      fileEntries.forEach(file => {
-        if (file.content) {
-          const displayPath = getDisplayPath(file.path);
-          codeBlock += displayPath + "\n```\n" + file.content + "\n```\n\n";
-        }
-      });
-
-      await vscode.env.clipboard.writeText(codeBlock);
-      vscode.window.showInformationMessage('Code block copied to clipboard!');
-    })
-  );
-
-  // Register command to clear all files
-  context.subscriptions.push(
-    vscode.commands.registerCommand('fileintegrator.clearFiles', () => {
-      fileStorage.clearFiles();
-      fileIntegratorProvider.refresh();
-      
-      // Close any open code block documents
-      closeCodeBlockDocuments();
-      
-      vscode.window.showInformationMessage('All files cleared.');
-    })
-  );
-}
-
-// This method is called when your extension is deactivated
-export function deactivate() {
-  // Close all code block documents
-  closeCodeBlockDocuments();
-}
-
-// Helper function to get relative path
-function getDisplayPath(filePath: string): string {
-  const workspaceFolders = vscode.workspace.workspaceFolders;
-  if (workspaceFolders) {
-    // Try to make path relative to workspace root
-    for (const folder of workspaceFolders) {
-      const folderPath = folder.uri.fsPath;
-      if (filePath.startsWith(folderPath)) {
-        // Create relative path from workspace root
-        return filePath.substring(folderPath.length + 1);
-      }
-    }
-  }
-
-  // If not in workspace, try to extract project-relevant part of the path
-  // Look for 'vscodedragger/fileintegrator' or similar pattern in the path
-  const projectMatch = filePath.match(/(?:\/|\\)([\w-]+\/[\w-]+\/[\w.-]+)$/);
-  if (projectMatch && projectMatch[1]) {
-    return projectMatch[1].replace(/\\/g, '/'); // Normalize to forward slashes
-  }
-  
-  // Extract just the last two directory names and the filename
-  const parts = filePath.split(/[\\\/]/);
-  if (parts.length > 3) {
-    return parts.slice(-3).join('/');
-  }
-  
-  return path.basename(filePath); // Fallback to just the filename
+interface FileEntry {
+  path: string;
+  content: string | null; // Content might be null if reading failed
+  isDirectory: boolean;
+  parent?: string; // Path of the parent directory within the session
+  sessionId: string; // Link back to the session it belongs to
 }
 
 /**
- * Shows or creates a code block document with contents from the files
+ * Manages file storage for a single session using asynchronous operations.
  */
-async function showCodeBlockDocument(files: { path: string; content: string | null }[]): Promise<vscode.TextDocument | undefined> {
-  // Generate the content
-  let content = '';
-  
-  files.forEach(file => {
-    if (file.content) {
-      const displayPath = getDisplayPath(file.path);
-      content += displayPath + "\n```\n" + file.content + "\n```\n\n";
-    }
-  });
-  
-  // Check if we already have a code block document open
-  if (codeBlockDocuments.length > 0) {
-    const doc = codeBlockDocuments[0];
-    
-    // Create a WorkspaceEdit to update the document
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(
-      doc.uri, 
-      new vscode.Range(0, 0, doc.lineCount, 0), 
-      content
-    );
-    
-    // Apply the edit
-    await vscode.workspace.applyEdit(edit);
-    return doc;
-  }
-  
-  // Create a new untitled document
-  const doc = await vscode.workspace.openTextDocument({
-    content: content,
-    language: 'markdown'
-  });
-  
-  // Add to our list of code block documents
-  codeBlockDocuments.push(doc);
-  
-  // Set up document change handler
-  const changeDisposable = vscode.workspace.onDidCloseTextDocument(closedDoc => {
-    if (closedDoc === doc) {
-      // Remove from our list of code block documents
-      codeBlockDocuments = codeBlockDocuments.filter(d => d !== doc);
-      changeDisposable.dispose();
-    }
-  });
-  
-  return doc;
-}
+class SessionFileStorage {
+  private _files: Map<string, FileEntry> = new Map(); // Use Map for efficient path lookup/update/delete
+  public readonly sessionId: string;
 
-/**
- * Updates all open code block documents with the latest file content
- */
-async function updateCodeBlockDocuments(files: { path: string; content: string | null; isDirectory: boolean; parent?: string }[]): Promise<void> {
-  if (codeBlockDocuments.length === 0) {
-    return;
-  }
-  
-  // Generate the content
-  let content = '';
-  
-  // Get only files with content (not directories)
-  const fileEntries = files.filter(file => !file.isDirectory && file.content);
-  
-  fileEntries.forEach(file => {
-    if (file.content) {
-      const displayPath = getDisplayPath(file.path);
-      content += displayPath + "\n```\n" + file.content + "\n```\n\n";
-    }
-  });
-  
-  // Update all code block documents
-  for (const doc of codeBlockDocuments) {
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(
-      doc.uri, 
-      new vscode.Range(0, 0, doc.lineCount, 0), 
-      content
-    );
-    
-    await vscode.workspace.applyEdit(edit);
-  }
-}
-
-/**
- * Closes all code block documents
- */
-async function closeCodeBlockDocuments(): Promise<void> {
-  // Create a copy of the array since we'll be modifying it during iteration
-  const docsToClose = [...codeBlockDocuments];
-  
-  for (const doc of docsToClose) {
-    // Find all editors showing this document and close them
-    for (const editor of vscode.window.visibleTextEditors) {
-      if (editor.document === doc) {
-        await vscode.window.showTextDocument(editor.document, editor.viewColumn);
-        await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
-      }
-    }
-  }
-  
-  // Clear the array
-  codeBlockDocuments = [];
-}
-
-/**
- * File storage class to manage files across views
- */
-class FileStorage {
-  private _files: { path: string; content: string | null; isDirectory: boolean; parent?: string }[] = [];
-
-  get files(): { path: string; content: string | null; isDirectory: boolean; parent?: string }[] {
-    return this._files;
+  constructor(sessionId: string) {
+    this.sessionId = sessionId;
   }
 
-  // Get only the files (not directories)
+  // Get all entries currently stored
+  get files(): FileEntry[] {
+    return Array.from(this._files.values());
+  }
+
+  // Get only entries that represent files (not directories)
   get filesOnly(): { path: string; content: string | null }[] {
-    return this._files.filter(f => !f.isDirectory).map(f => ({ path: f.path, content: f.content }));
+    return this.files.filter(f => !f.isDirectory).map(f => ({ path: f.path, content: f.content }));
   }
 
-  // Add a file to storage
-  addFile(filePath: string) {
-    
-    // Check if file already exists in the list
-    if (!this._files.some(f => f.path === filePath)) {
-      this._files.push({
-        path: filePath,
-        content: null,
-        isDirectory: false
-      });
+  // Add a single file asynchronously
+  async addFile(filePath: string, parentPath?: string): Promise<boolean> {
+    const normalizedPath = path.normalize(filePath);
+    if (this._files.has(normalizedPath)) return false;
+    let content: string | null = null;
+    try {
+      content = await fs.readFile(normalizedPath, 'utf8');
+    } catch (error: any) {
+      vscode.window.showErrorMessage(`Error reading file ${path.basename(normalizedPath)}: ${error.message}`);
+      console.error(`[Storage] Error reading file ${normalizedPath}:`, error);
+    }
+    const fileEntry: FileEntry = { path: normalizedPath, content: content, isDirectory: false, parent: parentPath ? path.normalize(parentPath) : undefined, sessionId: this.sessionId };
+    this._files.set(normalizedPath, fileEntry);
+    return true;
+  }
 
-      // Load file content
-      try {
-        const content = fs.readFileSync(filePath, 'utf8');
-        const fileIndex = this._files.findIndex(f => f.path === filePath);
-        if (fileIndex !== -1) {
-          this._files[fileIndex].content = content;
+  // Add a directory and its contents recursively and asynchronously
+  async addDirectory(dirPath: string, parentPath?: string): Promise<boolean> {
+    const normalizedPath = path.normalize(dirPath);
+    if (this._files.has(normalizedPath) && this._files.get(normalizedPath)?.isDirectory) return false;
+    const dirEntry: FileEntry = { path: normalizedPath, content: null, isDirectory: true, parent: parentPath ? path.normalize(parentPath) : undefined, sessionId: this.sessionId };
+    this._files.set(normalizedPath, dirEntry);
+    try {
+      const entries = await fs.readdir(normalizedPath, { withFileTypes: true });
+      const processingPromises: Promise<boolean>[] = [];
+      for (const entry of entries) {
+        const fullPath = path.join(normalizedPath, entry.name);
+        if (entry.isDirectory()) processingPromises.push(this.addDirectory(fullPath, normalizedPath));
+        else if (entry.isFile()) processingPromises.push(this.addFile(fullPath, normalizedPath));
+      }
+      await Promise.all(processingPromises);
+    } catch (error: any) {
+      vscode.window.showErrorMessage(`Error reading directory ${path.basename(normalizedPath)}: ${error.message}`);
+      console.error(`[Storage] Error reading directory ${normalizedPath}:`, error);
+      return false;
+    }
+    return true;
+  }
+
+  /** Remove a file or directory (and all its descendants within the storage). */
+  removeEntry(entryPath: string): boolean {
+    const normalizedPath = path.normalize(entryPath);
+    const entryToRemove = this._files.get(normalizedPath);
+    if (!entryToRemove) return false;
+    let itemsRemovedCount = 0;
+    if (this._files.delete(normalizedPath)) itemsRemovedCount++;
+    if (entryToRemove.isDirectory) {
+      const prefix = normalizedPath + path.sep;
+      const currentKeys = Array.from(this._files.keys());
+      currentKeys.forEach(key => { if (key.startsWith(prefix) && this._files.delete(key)) itemsRemovedCount++; });
+    }
+    return itemsRemovedCount > 0;
+  }
+
+  /** Clear all files and directories from this session's storage */
+  clearFiles(): number {
+    const count = this._files.size;
+    this._files.clear();
+    return count;
+  }
+}
+
+// --- Session Class ---
+class Session {
+  public readonly id: string;
+  public name: string;
+  public readonly storage: SessionFileStorage;
+  public associatedDocument: vscode.TextDocument | null = null;
+  private docCloseListener: vscode.Disposable | null = null;
+
+  constructor(name: string, id: string = uuidv4()) {
+    this.id = id;
+    this.name = name;
+    this.storage = new SessionFileStorage(this.id);
+  }
+
+  dispose() {
+    this.closeAssociatedDocument(false);
+    this.docCloseListener?.dispose(); this.docCloseListener = null;
+    this.storage.clearFiles();
+  }
+
+  setAssociatedDocument(doc: vscode.TextDocument) {
+    this.docCloseListener?.dispose();
+    this.associatedDocument = doc;
+    this.docCloseListener = vscode.workspace.onDidCloseTextDocument(closedDoc => {
+      if (closedDoc === this.associatedDocument) {
+        this.associatedDocument = null; this.docCloseListener?.dispose(); this.docCloseListener = null;
+      }
+    });
+  }
+
+  async closeAssociatedDocument(attemptEditorClose: boolean = true): Promise<void> {
+    const docToClose = this.associatedDocument;
+    this.associatedDocument = null; this.docCloseListener?.dispose(); this.docCloseListener = null;
+    if (attemptEditorClose && docToClose) {
+      for (const editor of vscode.window.visibleTextEditors) {
+        if (editor.document === docToClose) {
+          try {
+            await vscode.window.showTextDocument(docToClose, { viewColumn: editor.viewColumn, preserveFocus: false });
+            await vscode.commands.executeCommand('workbench.action.closeActiveEditor'); break;
+          } catch (error) { console.error(`Session "${this.name}": Error closing editor:`, error); }
         }
-      } catch (error) {
-        vscode.window.showErrorMessage(`Error reading file ${filePath}: ${error}`);
       }
     }
   }
+}
 
-  // Add a directory and all its files
-  addDirectory(dirPath: string, parentPath?: string) {
-    
-    // Check if directory already exists
-    if (this._files.some(f => f.path === dirPath && f.isDirectory)) {
-      return; // Directory already added
+
+// --- Session Manager Class ---
+class SessionManager {
+  private sessions: Map<string, Session> = new Map();
+  private static readonly STORAGE_KEY = 'fileIntegratorSessions';
+  constructor(private context: vscode.ExtensionContext) { }
+  createSession(name?: string): Session { const n = name || `Session ${this.sessions.size + 1}`; const s = new Session(n); this.sessions.set(s.id, s); this.persistSessions(); return s; }
+  getSession(id: string): Session | undefined { return this.sessions.get(id); }
+  getAllSessions(): Session[] { return Array.from(this.sessions.values()).sort((a, b) => a.name.localeCompare(b.name)); }
+  removeSession(id: string): boolean { const s = this.sessions.get(id); if (s) { s.dispose(); const d = this.sessions.delete(id); if (d) this.persistSessions(); return d; } return false; }
+  renameSession(id: string, newName: string): boolean { const s = this.sessions.get(id); if (s) { s.name = newName; this.persistSessions(); return true; } return false; }
+  persistSessions() { try { const m = this.getAllSessions().map(s => ({ id: s.id, name: s.name })); this.context.workspaceState.update(SessionManager.STORAGE_KEY, m); } catch (e) { console.error("Persist error:", e); } }
+  loadSessions() { try { const m = this.context.workspaceState.get<{ id: string, name: string }[]>(SessionManager.STORAGE_KEY, []); this.sessions.clear(); m.forEach(meta => { this.sessions.set(meta.id, new Session(meta.name, meta.id)); }); } catch (e) { console.error("Load error:", e); this.sessions.clear(); } if (this.sessions.size === 0) this.createSession("Default Session"); }
+  dispose() { this.getAllSessions().forEach(s => s.dispose()); this.sessions.clear(); }
+}
+
+// --- Tree View Items ---
+type IntegratorTreeItem = SessionItem | FileSystemItem;
+class SessionItem extends vscode.TreeItem {
+  constructor(public readonly session: Session, collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.Collapsed) {
+    super(session.name, collapsibleState); this.id = session.id; this.contextValue = 'session'; this.iconPath = new vscode.ThemeIcon('folder-library'); this.tooltip = `Session: ${session.name}`; this.description = `(${session.storage.files.length} items)`;
+  }
+}
+class FileSystemItem extends vscode.TreeItem {
+  constructor(public readonly entry: FileEntry, collapsibleState: vscode.TreeItemCollapsibleState) {
+    const basename = path.basename(entry.path); super(basename, collapsibleState); this.id = `${entry.sessionId}::${entry.path}`; this.resourceUri = vscode.Uri.file(entry.path); this.tooltip = `${entry.isDirectory ? 'Directory' : 'File'}:\n${entry.path}`; this.description = getDisplayPath(entry.path, true); this.contextValue = entry.isDirectory ? 'directory' : 'file'; this.iconPath = entry.isDirectory ? vscode.ThemeIcon.Folder : vscode.ThemeIcon.File;
+  }
+  get sessionId(): string { return this.entry.sessionId; } get path(): string { return this.entry.path; } get isDirectory(): boolean { return this.entry.isDirectory; }
+}
+
+// --- Tree Data Provider ---
+class FileIntegratorProvider implements vscode.TreeDataProvider<IntegratorTreeItem>, vscode.TreeDragAndDropController<IntegratorTreeItem> {
+  private _onDidChangeTreeData: vscode.EventEmitter<IntegratorTreeItem | undefined | null | void> = new vscode.EventEmitter();
+  readonly onDidChangeTreeData: vscode.Event<IntegratorTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
+  readonly dropMimeTypes = ['text/uri-list']; readonly dragMimeTypes: readonly string[] = [];
+  constructor(private sessionManager: SessionManager) { }
+  getTreeItem(element: IntegratorTreeItem): vscode.TreeItem { return element; }
+  getChildren(element?: IntegratorTreeItem): vscode.ProviderResult<IntegratorTreeItem[]> {
+    const sortEntries = (a: FileEntry, b: FileEntry) => (a.isDirectory === b.isDirectory) ? path.basename(a.path).localeCompare(path.basename(b.path)) : (a.isDirectory ? -1 : 1);
+    if (!element) { return Promise.resolve(this.sessionManager.getAllSessions().map(s => new SessionItem(s, s.storage.files.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None))); }
+    if (element instanceof SessionItem) { const s = this.sessionManager.getSession(element.session.id); if (!s) return []; const r = s.storage.files.filter(f => !f.parent).sort(sortEntries); return Promise.resolve(r.map(e => new FileSystemItem(e, e.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None))); }
+    if (element instanceof FileSystemItem && element.isDirectory) { const s = this.sessionManager.getSession(element.sessionId); if (!s) return []; const c = s.storage.files.filter(f => f.parent === element.path).sort(sortEntries); return Promise.resolve(c.map(e => new FileSystemItem(e, e.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None))); }
+    return Promise.resolve([]);
+  }
+  refresh(element?: IntegratorTreeItem): void { this._onDidChangeTreeData.fire(element); }
+
+  // --- Drag and Drop Handler ---
+  async handleDrop(target: IntegratorTreeItem | undefined, sources: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void> {
+    const transferItem = sources.get('text/uri-list');
+    if (!transferItem || token.isCancellationRequested) return;
+
+    // Determine target session
+    let targetSession: Session | undefined;
+    if (target instanceof SessionItem) targetSession = target.session;
+    else if (target instanceof FileSystemItem) targetSession = this.sessionManager.getSession(target.sessionId);
+    else {
+      const sessions = this.sessionManager.getAllSessions(); targetSession = sessions.length > 0 ? sessions[0] : undefined;
+      if (targetSession && sessions.length > 1) vscode.window.showInformationMessage(`Added files to session: "${targetSession.name}" (Dropped on view background)`);
+      else if (!targetSession) { vscode.window.showErrorMessage("Cannot add files: No sessions exist."); return; }
     }
+    if (!targetSession) { vscode.window.showErrorMessage("Could not determine target session."); return; }
 
-    // Add the directory itself
-    this._files.push({
-      path: dirPath,
-      content: null,
-      isDirectory: true,
-      parent: parentPath // Set the parent directory if provided
+    const uriList = await transferItem.asString();
+    const uris = uriList.split('\n').map(u => u.trim()).filter(Boolean);
+    if (uris.length === 0) return;
+
+    // Process files with progress
+    await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Adding files to session "${targetSession.name}"...`, cancellable: true }, async (progress, progressToken) => {
+      progressToken.onCancellationRequested(() => { console.log("User cancelled file adding."); });
+      for (let i = 0; i < uris.length; i++) {
+        if (progressToken.isCancellationRequested) break;
+        const uri = uris[i]; let filePath = '';
+        try {
+          filePath = uriToPath(uri);
+          progress.report({ message: `(${i + 1}/${uris.length}) ${path.basename(filePath)}`, increment: 100 / uris.length });
+          await this.processPath(filePath, targetSession, progressToken);
+        } catch (err: any) { vscode.window.showErrorMessage(`Error processing ${filePath || uri}: ${err.message}`); console.error(`Error processing URI ${uri}:`, err); }
+      }
     });
 
-    // Read directory contents
+    // Refresh view ONLY
+    this.refresh();
+    console.log("Tree view refreshed after drop. Document update skipped intentionally.");
+
+    // ** REMOVED THE CALL TO updateCodeBlockDocument HERE **
+    // await updateCodeBlockDocument(targetSession); // <-- This line was removed
+  }
+
+  private async processPath(filePath: string, session: Session, token: vscode.CancellationToken): Promise<void> {
+    if (token.isCancellationRequested) return;
     try {
-      const entries = fs.readdirSync(dirPath, { withFileTypes: true });
-      
-      // Process each entry
-      for (const entry of entries) {
-        const fullPath = path.join(dirPath, entry.name);
-        
-        if (entry.isDirectory()) {
-          // Recursively add subdirectories with current directory as parent
-          this.addDirectory(fullPath, dirPath);
-        } else if (entry.isFile()) {
-          // Add file with parent reference
-          this._files.push({
-            path: fullPath,
-            content: null,
-            isDirectory: false,
-            parent: dirPath
-          });
-
-          // Load file content
-          try {
-            const content = fs.readFileSync(fullPath, 'utf8');
-            const fileIndex = this._files.findIndex(f => f.path === fullPath);
-            if (fileIndex !== -1) {
-              this._files[fileIndex].content = content;
-            }
-          } catch (error) {
-            console.error(`Error reading file ${fullPath}:`, error);
-          }
-        }
-      }
-    } catch (error) {
-      vscode.window.showErrorMessage(`Error reading directory ${dirPath}: ${error}`);
-    }
-  }
-
-  // Remove file or directory
-  removeFile(filePath: string) {
-    
-    const fileToRemove = this._files.find(f => f.path === filePath);
-    
-    if (!fileToRemove) {
-      return;
-    }
-    
-    if (fileToRemove.isDirectory) {
-      
-      // Normalize path separators for consistent comparison
-      const normalizedDirPath = filePath.replace(/\\/g, '/');
-      
-      // Find ALL paths that will be removed (for logging)
-      const pathsToRemove = this._files
-        .filter(f => {
-          const normalizedFilePath = f.path.replace(/\\/g, '/');
-          return normalizedFilePath === normalizedDirPath || 
-                 normalizedFilePath.startsWith(normalizedDirPath + '/');
-        })
-        .map(f => f.path);
-      
-      
-      // Simple filter: keep only files that are NOT within this directory
-      this._files = this._files.filter(f => {
-        const normalizedFilePath = f.path.replace(/\\/g, '/');
-        const shouldRemove = normalizedFilePath === normalizedDirPath || 
-                             normalizedFilePath.startsWith(normalizedDirPath + '/');
-        return !shouldRemove;
-      });
-    } else {
-      // Remove individual file
-      
-      const index = this._files.findIndex(f => f.path === filePath);
-      if (index !== -1) {
-        this._files.splice(index, 1);
-      }
-    }
-    
-    // Debug check: Verify the file is actually gone
-    const stillExists = this._files.some(f => f.path === filePath);
-    
-    // Debug check: Log all file paths after removal
-  }
-
-  clearFiles() {
-    this._files = [];
+      const exists = await fs.pathExists(filePath); if (!exists) return;
+      if (token.isCancellationRequested) return;
+      const stats = await fs.stat(filePath); if (token.isCancellationRequested) return;
+      if (stats.isDirectory()) await session.storage.addDirectory(filePath);
+      else if (stats.isFile()) await session.storage.addFile(filePath);
+    } catch (err: any) { vscode.window.showErrorMessage(`Error processing path ${path.basename(filePath)}: ${err.message}`); console.error(`Error processing path ${filePath}:`, err); }
   }
 }
 
-/**
- * TreeItem representing a file or directory in the view
- */
-class FileItem extends vscode.TreeItem {
-  constructor(
-    public readonly path: string,
-    public readonly isDirectory: boolean,
-    public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-    public readonly parent?: string
-  ) {
-    super(path, collapsibleState);
-    
-    // Set the appropriate label and icon
-    const basename = path.split(/[\\/]/).pop() || path;
-    this.label = basename;
-    
-    if (isDirectory) {
-      this.tooltip = `Directory: ${path}`;
-      this.contextValue = 'directory';
-      this.iconPath = new vscode.ThemeIcon('folder');
-      this.description = getDisplayPath(path);
-    } else {
-      this.tooltip = `File: ${path}`;
-      this.contextValue = 'file';
-      this.iconPath = new vscode.ThemeIcon('file');
-      this.description = getDisplayPath(path);
-    }
-  }
+
+// --- Global Variables & Activation ---
+let sessionManager: SessionManager;
+let fileIntegratorProvider: FileIntegratorProvider;
+let treeView: vscode.TreeView<IntegratorTreeItem>;
+
+export function activate(context: vscode.ExtensionContext) {
+  sessionManager = new SessionManager(context); sessionManager.loadSessions();
+  fileIntegratorProvider = new FileIntegratorProvider(sessionManager);
+  treeView = vscode.window.createTreeView('fileIntegratorView', { treeDataProvider: fileIntegratorProvider, dragAndDropController: fileIntegratorProvider, showCollapseAll: true, canSelectMany: true });
+  context.subscriptions.push(treeView); registerCommands(context); context.subscriptions.push({ dispose: () => sessionManager.dispose() });
+  console.log('File Integrator activated.');
 }
 
-/**
- * Tree data provider for the file integrator view
- */
-class FileIntegratorProvider implements vscode.TreeDataProvider<FileItem>, vscode.TreeDragAndDropController<FileItem> {
-  private _onDidChangeTreeData: vscode.EventEmitter<FileItem | undefined | null | void> = new vscode.EventEmitter<FileItem | undefined | null | void>();
-  readonly onDidChangeTreeData: vscode.Event<FileItem | undefined | null | void> = this._onDidChangeTreeData.event;
-  
-  // Restore original working dropMimeTypes
-  readonly dropMimeTypes = ['application/vnd.code.tree.fileIntegratorView', 'text/uri-list'];
-  readonly dragMimeTypes = ['text/uri-list'];
+// --- Command Registration ---
+function registerCommands(context: vscode.ExtensionContext) {
+  const register = (commandId: string, callback: (...args: any[]) => any) => { context.subscriptions.push(vscode.commands.registerCommand(commandId, callback)); };
 
-  constructor(private fileStorage: FileStorage) {}
+  // Session Management
+  register('fileintegrator.addSession', async () => { const n = await vscode.window.showInputBox({ prompt: "Session name", value: `Session ${sessionManager.getAllSessions().length + 1}` }); if (n && n.trim()) { const s = sessionManager.createSession(n.trim()); fileIntegratorProvider.refresh(); treeView.reveal(new SessionItem(s), { select: true, focus: true, expand: true }); } });
+  register('fileintegrator.removeSession', async (item?: SessionItem) => { const s = item?.session ?? await selectSession('Select session to remove'); if (!s) return; const c = await vscode.window.showWarningMessage(`Remove session "${s.name}"?`, { modal: true }, 'Yes'); if (c === 'Yes') { await s.closeAssociatedDocument(true); if (sessionManager.removeSession(s.id)) fileIntegratorProvider.refresh(); } });
+  register('fileintegrator.renameSession', async (item?: SessionItem) => { const s = item?.session ?? await selectSession('Select session to rename'); if (!s) return; const n = await vscode.window.showInputBox({ prompt: `New name for "${s.name}"`, value: s.name }); if (n && n.trim() && sessionManager.renameSession(s.id, n.trim())) fileIntegratorProvider.refresh(); });
 
-  getTreeItem(element: FileItem): vscode.TreeItem {
-    return element;
-  }
+  // Session Content
+  register('fileintegrator.clearSession', async (item?: SessionItem) => { const s = item?.session ?? await selectSession('Select session to clear'); if (!s || s.storage.files.length === 0) return; const c = await vscode.window.showWarningMessage(`Clear all files from "${s.name}"?`, { modal: true }, 'Yes'); if (c === 'Yes') { s.storage.clearFiles(); fileIntegratorProvider.refresh(); await updateCodeBlockDocument(s); } }); // Keep update here
+  register('fileintegrator.generateCodeBlock', async (item?: SessionItem) => { const s = item?.session ?? await selectSession('Select session to generate'); if (!s) return; if (s.storage.filesOnly.length === 0) { vscode.window.showInformationMessage("No file content."); return; } const doc = await showCodeBlockDocument(s); if (doc) await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false }); });
+  register('fileintegrator.copyToClipboard', async (item?: SessionItem) => { const s = item?.session ?? await selectSession('Select session to copy'); if (!s) return; if (s.storage.filesOnly.length === 0) { vscode.window.showInformationMessage("No file content."); return; } let c = (s.associatedDocument && !s.associatedDocument.isClosed) ? s.associatedDocument.getText() : generateMarkdownContent(s); if (c) { await vscode.env.clipboard.writeText(c); vscode.window.showInformationMessage(`Session "${s.name}" copied!`); } else { vscode.window.showWarningMessage("No content generated."); } });
 
-  getChildren(element?: FileItem): Thenable<FileItem[]> {
-    // If an element is provided, we're looking for its children
-    if (element) {
-      // Return children of this directory
-      const directoryPath = element.path;
-      const children = this.fileStorage.files.filter(file => file.parent === directoryPath);
-      
-      return Promise.resolve(
-        children.map(file => 
-          new FileItem(
-            file.path, 
-            file.isDirectory, 
-            file.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None,
-            file.parent
-          )
-        )
-      );
-    } else {
-      // Root level - show top-level items (files without parents and root directories)
-      const rootItems = this.fileStorage.files.filter(file => !file.parent);
-      
-      return Promise.resolve(
-        rootItems.map(file => 
-          new FileItem(
-            file.path, 
-            file.isDirectory, 
-            file.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
-          )
-        )
-      );
-    }
-  }
+  // File/Directory Item
+  register('fileintegrator.removeFile', (item: FileSystemItem) => { if (!item || !(item instanceof FileSystemItem)) return; const s = sessionManager.getSession(item.sessionId); if (s) { if (s.storage.removeEntry(item.path)) { fileIntegratorProvider.refresh(); updateCodeBlockDocument(s); } else { fileIntegratorProvider.refresh(); } } }); // Keep update here
 
-  refresh(): void {
-    this._onDidChangeTreeData.fire();
-  }
-
-  // Handle drop events on the tree view
-  handleDrop(target: FileItem | undefined, sources: vscode.DataTransfer, token: vscode.CancellationToken): Thenable<void> {
-    // Try both 'files' and 'text/uri-list' mime types
-    const filesItem = sources.get('files');
-    const uriListItem = sources.get('text/uri-list');
-    
-    if (filesItem) {
-      return filesItem.asString().then(async (filesData) => {
-        try {
-          const files = JSON.parse(filesData);
-          for (const file of files) {
-            const filePath = file.fsPath || file;
-            await this.processPath(filePath);
-          }
-        } catch (err) {
-          vscode.window.showErrorMessage(`Error processing files: ${err instanceof Error ? err.message : String(err)}`);
-          this.processPath(filesData);
-        }
-        this.refresh();
-        
-        // Update any open code block documents with the new files
-        updateCodeBlockDocuments(this.fileStorage.files);
-        
-        return Promise.resolve();
-      });
-    } else if (uriListItem) {
-      return uriListItem.asString().then(async (uriList) => {
-        const uris = uriList.split('\n').filter(Boolean).map(uri => uri.trim());
-
-        for (const uri of uris) {
-          let filePath = uri.replace(/^file:\/\//i, '');
-          try {
-            filePath = decodeURIComponent(filePath);
-            
-            // Handle Windows drive letter format (/C:/path/to/file)
-            if (process.platform === 'win32' && filePath.match(/^\/[A-Za-z]:/)) {
-              filePath = filePath.slice(1);
-            }
-            
-            await this.processPath(filePath);
-          } catch (err) {
-            vscode.window.showErrorMessage(`Error processing URI: ${err instanceof Error ? err.message : String(err)}`);
-          }
-        }
-        
-        this.refresh();
-        
-        // Update any open code block documents with the new files
-        updateCodeBlockDocuments(this.fileStorage.files);
-        
-        return Promise.resolve();
-      });
-    }
-
-    return Promise.resolve();
-  }
-
-  // Helper method to process a file or directory path
-  private async processPath(path: string): Promise<void> {
-    try {
-      if (fs.existsSync(path)) {
-        const stats = fs.statSync(path);
-        
-        if (stats.isDirectory()) {
-          this.fileStorage.addDirectory(path);
-        } else if (stats.isFile()) {
-          this.fileStorage.addFile(path);
-        }
-      }
-    } catch (err) {
-      vscode.window.showErrorMessage(`Error processing path: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
+  // Utility
+  register('fileintegrator.refreshView', () => { fileIntegratorProvider.refresh(); vscode.window.showInformationMessage("View refreshed."); });
 }
+
+// --- Deactivation ---
+export function deactivate() { console.log('Deactivating File Integrator...'); }
+
+// --- Helper Functions ---
+
+/** Converts URI string to normalized file system path. */
+function uriToPath(uriString: string): string { try { const u = vscode.Uri.parse(uriString, true); if (u.scheme === 'file') return u.fsPath; return path.normalize(decodeURIComponent(u.path)); } catch (e) { let p = uriString.replace(/^file:\/\//i, ''); try { p = decodeURIComponent(p); } catch { /* Ignore */ } if (process.platform === 'win32' && /^\/[A-Za-z]:/.test(p)) p = p.substring(1); return path.normalize(p); } }
+/** Prompts user to select a session via Quick Pick. */
+async function selectSession(placeHolder: string): Promise<Session | undefined> { const s = sessionManager.getAllSessions(); if (s.length === 0) { vscode.window.showErrorMessage("No sessions."); return; } if (s.length === 1) return s[0]; const p = s.map(x => ({ label: x.name, description: `(${x.storage.files.length} items)`, session: x })); const sel = await vscode.window.showQuickPick(p, { placeHolder, canPickMany: false }); return sel?.session; }
+/** Generates aggregated Markdown content for a session. */
+function generateMarkdownContent(session: Session): string { let c = ''; const f = session.storage.filesOnly.sort((a, b) => a.path.localeCompare(b.path)); if (f.length === 0) return `<!-- No file content in session "${session.name}" -->\n`; f.forEach(file => { const d = getDisplayPath(file.path); c += `${d}\n\`\`\`\n${file.content ?? `--- Error reading file content ---`}\n\`\`\`\n\n`; }); return c.trimEnd(); }
+/** Shows/Updates the code block document for a session. */
+async function showCodeBlockDocument(session: Session): Promise<vscode.TextDocument | undefined> { const content = generateMarkdownContent(session); if (session.associatedDocument && !session.associatedDocument.isClosed) { const doc = session.associatedDocument; try { const edit = new vscode.WorkspaceEdit(); edit.replace(doc.uri, new vscode.Range(0, 0, doc.lineCount, 0), content); if (!await vscode.workspace.applyEdit(edit)) throw new Error("ApplyEdit failed"); return doc; } catch (e) { console.error(`Error updating doc ${doc.uri}:`, e); vscode.window.showErrorMessage("Failed to update doc."); session.closeAssociatedDocument(false); return; } } try { const doc = await vscode.workspace.openTextDocument({ content: content, language: 'markdown' }); session.setAssociatedDocument(doc); return doc; } catch (e: any) { console.error(`Failed to create doc:`, e); vscode.window.showErrorMessage(`Failed to create doc: ${e.message}`); return; } }
+/** Updates associated document IF it exists and is open. */
+async function updateCodeBlockDocument(session: Session): Promise<void> { if (session.associatedDocument && !session.associatedDocument.isClosed) { const d = session.associatedDocument; const c = generateMarkdownContent(session); try { const e = new vscode.WorkspaceEdit(); e.replace(d.uri, new vscode.Range(0, 0, d.lineCount, 0), c); if (!await vscode.workspace.applyEdit(e)) { console.warn(`ApplyEdit failed for ${d.uri}. Detaching.`); session.closeAssociatedDocument(false); } } catch (err) { console.error(`Error applying edit to ${d.uri}:`, err); vscode.window.showErrorMessage("Error updating code block."); session.closeAssociatedDocument(false); } } if (session.associatedDocument && session.associatedDocument.isClosed) { session.associatedDocument = null; } }
+/** Generates display-friendly path, preferably relative. */
+function getDisplayPath(filePath: string, short: boolean = false): string { const wf = vscode.workspace.workspaceFolders; let rp: string | undefined; if (wf) { const sf = [...wf].sort((a, b) => b.uri.fsPath.length - a.uri.fsPath.length); for (const f of sf) { const fp = f.uri.fsPath; if (filePath.startsWith(fp + path.sep)) { rp = path.relative(fp, filePath); break; } } } if (rp) return rp.replace(/\\/g, '/'); const p = filePath.split(/[\\/]/); const pc = p.length; if (!short && pc > 2) return '...' + path.sep + p.slice(-2).join(path.sep); else if (pc > 1) return p.slice(-2).join(path.sep); else return p[0] ?? filePath; }
