@@ -2,7 +2,7 @@
   "name": "fileintegrator",
   "displayName": "File Integrator",
   "description": "Integrates content from multiple files/directories via drag-and-drop sessions.",
-  "version": "0.0.4",
+  "version": "0.0.5",
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -15,12 +15,14 @@
   "main": "./out/extension.js",
   "dependencies": {
     "fs-extra": "^11.2.0",
-    "uuid": "^9.0.1"
+    "uuid": "^9.0.1",
+    "minimatch": "^9.0.5"
   },
   "devDependencies": {
     "@types/fs-extra": "^11.0.4",
     "@types/uuid": "^9.0.8",
     "@types/vscode": "^1.97.0",
+    "@types/minimatch": "^5.1.2",
     "@types/mocha": "^10.0.10",
     "@types/node": "20.x",
     "@typescript-eslint/eslint-plugin": "^8.25.0",
@@ -31,6 +33,38 @@
     "@vscode/test-electron": "^2.4.1"
   },
   "contributes": {
+    "configuration": {
+      "title": "File Integrator",
+      "properties": {
+        "fileintegrator.exclude": {
+          "type": "object",
+          "description": "Configure glob patterns for files and folders that File Integrator should exclude when adding items via drag and drop. Prepend '**/' to match files/folders anywhere in the path.",
+          "default": {
+            "**/.git": true,
+            "**/.svn": true,
+            "**/.hg": true,
+            "**/CVS": true,
+            "**/.DS_Store": true,
+            "**/node_modules": true,
+            "**/bower_components": true,
+            "**/__pycache__": true,
+            "**/*.pyc": true,
+            "**/.classpath": true,
+            "**/.project": true,
+            "**/.settings": true,
+            "**/*.class": true,
+            "**/target": true, 
+            "**/bin": true,    
+            "**/build": true,
+            "**/.vscode": true 
+          },
+          "additionalProperties": {
+            "type": "boolean",
+            "description": "Set to true to exclude files/folders matching the glob pattern."
+          }
+        }
+      }
+    },
     "commands": [
       {
         "command": "fileintegrator.addSession",
