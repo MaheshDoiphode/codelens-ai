@@ -131,6 +131,11 @@ None! Works out-of-the-box with VS Code.
 
 ## Release Notes
 
+### 0.0.6
+
+-   **Added:** Drag-and-Drop Reordering! Prioritize files/directories within a session's view. The order is respected in generated/copied output. (Limited to sibling reordering).
+-   **Changed:** Internal storage now uses an Array to maintain user-defined order.
+
 ### 0.0.5
 
 -   **Added:** File & Directory Exclusion! Configure glob patterns via `fileintegrator.exclude` setting to ignore unwanted items (e.g., `node_modules`, `.git`).

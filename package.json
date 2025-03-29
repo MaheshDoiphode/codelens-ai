@@ -2,7 +2,7 @@
   "name": "fileintegrator",
   "displayName": "File Integrator",
   "description": "Integrates content from multiple files/directories via drag-and-drop sessions.",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "engines": {
     "vscode": "^1.97.0"
   },
