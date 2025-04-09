@@ -20,6 +20,7 @@ Tired of manually copying and pasting code from various files and sources? File 
 -   **↕️ Reorder Items:** Easily drag and drop resources *within* a session's level to change their order. This order is saved and used when generating output.
 -   **🌲 Hierarchical View:** Added directories retain their structure within the session view.
 -   **👓 Improved Display:** URIs for library files (e.g., inside JARs/ZIPs) are shown concisely in the tree view and informatively in generated output.
+-   **🖱️ Click to Open:** Single-click any file or resource item in the tree view to open it directly in the editor.
 -   **⚙️ Customizable Exclusions:** Define glob patterns (`fileintegrator.exclude`) to ignore unwanted files/folders during **drag-and-drop** from the Explorer.
 -   ⚡ **Per-Session Actions:** Quickly Add Active Editor, Generate, Copy, or Clear content for specific sessions using inline icons.
 -   **📄 On-Demand Generation:** Create a clean, editable Markdown document showing resource identifiers and content *only* when you click "Generate Code Block".
@@ -58,8 +59,10 @@ Tired of manually copying and pasting code from various files and sources? File 
         *   Click the `➕` (Add Active Editor) icon that appears inline.
         *   The active editor's resource will be added to the session root. (Exclusions do *not* apply here).
 
-4.  **View & Reorder Items:**
+4.  **Interact with Items:**
     *   Expand a session (`▶`) to see its contents.
+    *   **Open Item:** Single-click any file or resource item (non-directory) to open it in the editor.
+    *   **Expand/Collapse Directory:** Single-click a directory item (`▶`/`▼`) to toggle its children.
     *   **Reorder:** Drag an item within the same level and drop it above/below another item. The order is saved.
 
 5.  **Session Actions (Inline Icons):**
@@ -121,22 +124,17 @@ Prevent unwanted files/folders from being added **when dragging from the Explore
 
 ## Release Notes
 
-### 0.0.8 (Latest)
-
--   **🚀 Feature:** **URI Support!** Can now add resources beyond simple files (e.g., files inside JARs/archives) using the "Add Active Editor" button.
--   **✨ Feature:** **Add Active Editor!** New inline button `➕` on session items to quickly add the current editor's content.
--   **👓 UI:** Improved display for non-file URIs (like archives) in tree view and generated output.
--   **UI:** Removed confirmation dialog when clearing a session.
--   **Fix:** Tree view now reliably updates when adding items via "Add Active Editor".
--   **Refactor:** Core logic updated to use URIs as primary identifiers.
--   **Refactor:** Persistence layer updated to store URIs; includes migration from v1/v2. Storage key version bumped to v3.
-
-### 0.0.7
-
--   **Feature:** Full Session Persistence (Path-based in this version). Sessions saved/restored their file list, hierarchy, and order.
--   **Refactor:** Content generation became async, loading content on demand.
--   **Fix:** Resolved TypeScript compilation errors.
--   **Perf:** Changed activation event to `onView:fileIntegratorView`.
+### 0.0.7 (Latest)
+-   **🚀 Feature: URI Support!** Can now add resources beyond simple files (e.g., files inside JARs/archives, untitled files) using the "Add Active Editor" button. Core logic updated to use URIs as primary identifiers.
+-   **✨ Feature: Add Active Editor!** New inline button `➕` on session items to quickly add the current editor's content without prompts.
+-   **✨ Feature: Click to Open!** Single-clicking file/resource items in the tree view now directly opens them in the editor.
+-   **💾 Feature: Full Session Persistence!** Sessions now save and restore their complete state, including the list of resources (identified by URI), their hierarchy, and their user-defined order, across VS Code restarts. Persistence layer updated to store URIs; includes migration from older path-based versions (v1/v2). Storage key version bumped to v3.
+-   **👓 UI: Improved Display:** Enhanced display for non-file URIs (like archives) in the tree view description and generated Markdown headers for better readability.
+-   **UI: No Clear Confirmation:** Removed the confirmation dialog when clearing a session for faster workflow.
+-   **Fix: Tree View Update:** Tree view now reliably updates immediately when adding items via "Add Active Editor".
+-   **Fix: Compilation Errors:** Resolved TypeScript compilation errors related to persistence loading.
+-   **Refactor: Async Content Generation:** Content generation (`generateMarkdownContent`) is now fully asynchronous and reads resource content on demand using VS Code APIs if not already loaded (e.g., after restart).
+-   **Perf: Lazy Activation:** Changed activation event to `onView:fileIntegratorView` for faster VS Code startup.
 
 ### 0.0.6
 

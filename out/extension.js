@@ -499,7 +499,7 @@ class ResourceItem extends vscode.TreeItem {
     collapsibleState) {
         const uri = vscode.Uri.parse(entry.uriString);
         let label = '';
-        // Extract a meaningful label (usually the file/resource name)
+        // --- Extract a meaningful label (usually the file/resource name) ---
         const pathPart = uri.path;
         // Check for archive paths first (jar: or file: schemes)
         const jarBangIndex = uri.scheme === 'jar' ? pathPart.indexOf('!/') : -1;
@@ -525,23 +525,34 @@ class ResourceItem extends vscode.TreeItem {
         // Final fallback if label is still empty
         if (!label)
             label = '...';
-        super(label, collapsibleState);
+        // --- End of Label Extraction ---
+        super(label, collapsibleState); // Initialize the TreeItem
         this.entry = entry;
-        this.id = `${entry.sessionId}::${entry.uriString}`; // Use uriString in ID
-        this.resourceUri = uri; // Critical for 'vscode.open' command
-        // Use 'tooltip' type for full details on hover
-        this.tooltip = `${entry.isDirectory ? 'Directory' : 'Resource'}:\n${getDisplayUri(entry.uriString, 'tooltip')}`;
-        // Use 'treeDescription' type for the shorter context view
-        this.description = getDisplayUri(entry.uriString, 'treeDescription');
-        // Provide context values for menu contributions
-        this.contextValue = entry.isDirectory ? 'resourceDirectory' : 'resourceFile';
-        // Use standard icons
-        this.iconPath = entry.isDirectory ? vscode.ThemeIcon.Folder : vscode.ThemeIcon.File;
-        // Optional: Decorate library files?
-        // if (uri.scheme === 'jar' || (uri.scheme === 'file' && uri.path.includes('!/'))) {
-        //    this.iconPath = new vscode.ThemeIcon('library'); // Or 'archive', 'symbol-field'
+        // --- Set Core Properties ---
+        this.id = `${entry.sessionId}::${entry.uriString}`; // Unique ID for the tree item
+        this.resourceUri = uri; // The URI represented by this item
+        // --- Add the command for single resources (Click-to-Open) ---
+        if (!entry.isDirectory) {
+            this.command = {
+                command: 'vscode.open', // Built-in command to open URIs
+                title: "Open Resource", // Tooltip for the command
+                arguments: [uri] // Pass the specific URI of this item
+            };
+            // Ensure non-directories are not expandable
+            this.collapsibleState = vscode.TreeItemCollapsibleState.None;
+        }
+        // --- End of Click-to-Open ---
+        // --- Set Visual Properties ---
+        this.tooltip = `${entry.isDirectory ? 'Directory' : 'Resource'}:\n${getDisplayUri(entry.uriString, 'tooltip')}`; // Detailed tooltip
+        this.description = getDisplayUri(entry.uriString, 'treeDescription'); // Contextual description in the tree
+        this.contextValue = entry.isDirectory ? 'resourceDirectory' : 'resourceFile'; // For context menu conditions
+        this.iconPath = entry.isDirectory ? vscode.ThemeIcon.Folder : vscode.ThemeIcon.File; // Standard icons
+        // Optional: Decorate library files? (Uncomment and adjust icon if desired)
+        // if (uri.scheme === 'jar' || (uri.scheme === 'file' && uriPath.includes('!/'))) {
+        //    this.iconPath = new vscode.ThemeIcon('library'); // Example: 'library', 'archive', 'symbol-field'
         // }
     }
+    // --- Getters ---
     get sessionId() { return this.entry.sessionId; }
     get uriString() { return this.entry.uriString; }
     get isDirectory() { return this.entry.isDirectory; }
