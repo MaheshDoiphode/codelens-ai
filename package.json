@@ -1,8 +1,8 @@
 {
   "name": "fileintegrator",
   "displayName": "File Integrator",
-  "description": "Integrates content from multiple files/directories via drag-and-drop sessions with persistence.",
-  "version": "0.0.7", 
+  "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence.",
+  "version": "0.0.8",
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -10,7 +10,7 @@
     "Other"
   ],
   "activationEvents": [
-     "onView:fileIntegratorView"
+    "onView:fileIntegratorView"
   ],
   "main": "./out/extension.js",
   "dependencies": {
@@ -38,7 +38,7 @@
       "properties": {
         "fileintegrator.exclude": {
           "type": "object",
-          "description": "Configure glob patterns for files and folders that File Integrator should exclude when adding items via drag and drop. Prepend '**/' to match files/folders anywhere in the path.",
+          "description": "Configure glob patterns for files and folders (based on file system paths) that File Integrator should exclude when adding items via drag and drop from the Explorer. Does not apply to items added via 'Add Active Editor'. Prepend '**/' to match files/folders anywhere in the path.",
           "default": {
             "**/.git": true,
             "**/.svn": true,
@@ -60,7 +60,7 @@
           },
           "additionalProperties": {
             "type": "boolean",
-            "description": "Set to true to exclude files/folders matching the glob pattern."
+            "description": "Set to true to exclude files/folders matching the glob pattern during drag/drop."
           }
         }
       }
@@ -83,7 +83,7 @@
       },
       {
         "command": "fileintegrator.clearSession",
-        "title": "Clear All Files from Session",
+        "title": "Clear All Items from Session",
         "icon": "$(clear-all)"
       },
       {
@@ -97,15 +97,20 @@
         "icon": "$(copy)"
       },
       {
-        "command": "fileintegrator.removeFile",
+        "command": "fileintegrator.removeItem",
         "title": "Remove Item",
         "icon": "$(close)"
       },
       {
-         "command": "fileintegrator.refreshView",
-         "title": "Refresh View",
-         "icon": "$(refresh)"
-       }
+        "command": "fileintegrator.refreshView",
+        "title": "Refresh View",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "fileintegrator.addActiveEditorToSession",
+        "title": "Add Active Editor to Session",
+        "icon": "$(add)"
+      }
     ],
     "viewsContainers": {
       "activitybar": [
@@ -139,6 +144,11 @@
       ],
       "view/item/context": [
         {
+          "command": "fileintegrator.addActiveEditorToSession",
+          "when": "view == fileIntegratorView && viewItem == session",
+          "group": "inline@0"
+        },
+        {
           "command": "fileintegrator.generateCodeBlock",
           "when": "view == fileIntegratorView && viewItem == session",
           "group": "inline@1"
@@ -164,13 +174,13 @@
           "group": "1_modification@2"
         },
         {
-          "command": "fileintegrator.removeFile",
-          "when": "view == fileIntegratorView && (viewItem == file || viewItem == directory)",
+          "command": "fileintegrator.removeItem",
+          "when": "view == fileIntegratorView && (viewItem == resourceFile || viewItem == resourceDirectory)",
           "group": "inline@1"
         },
         {
           "command": "vscode.open",
-          "when": "view == fileIntegratorView && viewItem == file",
+          "when": "view == fileIntegratorView && (viewItem == resourceFile || viewItem == resourceDirectory)",
           "group": "navigation",
           "args": ["{{resourceUri}}"]
         }

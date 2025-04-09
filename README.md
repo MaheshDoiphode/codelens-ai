@@ -1,32 +1,31 @@
 # File Integrator for VS Code
 
-Easily collect, organize, order, and format content from multiple files and directories within VS Code! Perfect for creating context for LLMs, assembling documentation, or sharing code snippets.
-
-[![Version](https://img.shields.io/visual-studio-marketplace/v/MaheshDoiphodeMSFT.fileintegrator?label=VS%20Marketplace)](https://marketplace.visualstudio.com/items?itemName=MaheshDoiphodeMSFT.fileintegrator)
-[![Installs](https://img.shields.io/visual-studio-marketplace/i/MaheshDoiphodeMSFT.fileintegrator)](https://marketplace.visualstudio.com/items?itemName=MaheshDoiphodeMSFT.fileintegrator)
+Easily collect, organize, order, and format content from files, directories, **and other VS Code resources** within your editor! Perfect for creating context for LLMs, assembling documentation, or sharing code snippets.
 
 ## Why File Integrator? 🤔
 
-Tired of manually copying and pasting code from various files? File Integrator streamlines this process:
+Tired of manually copying and pasting code from various files and sources? File Integrator streamlines this process:
 
--   **🧠 LLM Prompting:** Quickly gather all relevant code snippets and file contents into a single, ordered, formatted block to provide maximum context for AI assistants like ChatGPT, Claude, or Copilot Chat.
--   **📚 Documentation:** Assemble code examples from different parts of your project effortlessly, maintaining a logical order.
+-   **🧠 LLM Prompting:** Quickly gather relevant code snippets and file contents (including from library sources) into a single, ordered, formatted block to provide maximum context for AI assistants like ChatGPT, Claude, or Copilot Chat.
+-   **📚 Documentation:** Assemble code examples from different parts of your project or dependencies effortlessly, maintaining a logical order.
 -   **💬 Code Sharing:** Share context-rich snippets in issues, pull requests, or team chats without hassle.
--   **📂 Organization:** Use independent **Sessions** to group files for different tasks, features, or bug reports. Your sessions and their contents **persist** across VS Code restarts!
+-   **📂 Organization:** Use independent **Sessions** to group resources for different tasks, features, or bug reports. Your sessions and their contents **persist** across VS Code restarts!
 
 ## Features 🚀
 
--   **💾 Full Session Persistence:** Your sessions, the files/directories within them, their hierarchy, and their custom order are **saved and restored** automatically when you restart VS Code. Pick up right where you left off!
--   **✨ Multiple Sessions:** Create, rename, and manage independent sessions to organize different sets of files logically.
--   **🖱️ Drag & Drop Simplicity:** Add files or entire directories just by dragging them from the VS Code Explorer onto a session.
--   **↕️ Reorder Items:** Easily drag and drop files or folders *within* a session's level to change their order. This order is saved and used when generating output.
--   **🌲 Hierarchical View:** Added directories retain their structure within the session view, making navigation intuitive.
--   **⚙️ Customizable Exclusions:** Define glob patterns in your VS Code settings (`fileintegrator.exclude`) to automatically ignore unwanted files and folders (like `node_modules`, `.git`, build outputs, etc.) during drag-and-drop.
--   **⚡ Per-Session Actions:** Quickly Generate, Copy, or Clear content for specific sessions using inline icons or the context menu.
--   **📄 On-Demand Generation:** Create a clean, editable Markdown document showing file paths and content *only* when you click "Generate Code Block". No automatic pop-ups!
--   **📋 Easy Copying:** Copy the entire formatted Markdown block for a session (respecting the current order) to your clipboard with a single click.
--   **❌ Fine-Grained Removal:** Remove individual files or directories from a session easily.
--   **💨 Asynchronous & Responsive:** Built with async operations to keep your editor snappy, even when adding directories or generating content.
+-   **💾 Full Session Persistence:** Your sessions, the resources within them (identified by URI), their hierarchy, and their custom order are **saved and restored** automatically when you restart VS Code.
+-   **✨ Multiple Sessions:** Create, rename, and manage independent sessions to organize different sets of resources logically.
+-   **🔗 Add Active Editor:** Quickly add the currently focused editor tab (including library files, decompiled sources, etc.) to a session using a dedicated inline button.
+-   **🖱️ Drag & Drop:** Add standard files or entire directories just by dragging them from the VS Code Explorer onto a session.
+-   **↕️ Reorder Items:** Easily drag and drop resources *within* a session's level to change their order. This order is saved and used when generating output.
+-   **🌲 Hierarchical View:** Added directories retain their structure within the session view.
+-   **👓 Improved Display:** URIs for library files (e.g., inside JARs/ZIPs) are shown concisely in the tree view and informatively in generated output.
+-   **⚙️ Customizable Exclusions:** Define glob patterns (`fileintegrator.exclude`) to ignore unwanted files/folders during **drag-and-drop** from the Explorer.
+-   ⚡ **Per-Session Actions:** Quickly Add Active Editor, Generate, Copy, or Clear content for specific sessions using inline icons.
+-   **📄 On-Demand Generation:** Create a clean, editable Markdown document showing resource identifiers and content *only* when you click "Generate Code Block".
+-   **📋 Easy Copying:** Copy the entire formatted Markdown block for a session (respecting order) to your clipboard with a single click.
+-   **❌ Fine-Grained Removal:** Remove individual resources or directories from a session easily.
+-   **💨 Asynchronous & Responsive:** Built with async operations to keep your editor snappy.
 
 ## Installation 💻
 
@@ -40,46 +39,51 @@ Tired of manually copying and pasting code from various files? File Integrator s
 ## Getting Started & Usage 📖
 
 1.  **Open the View:**
-    *   Click the **File Integrator icon** (looks like stacked files) in the Activity Bar (usually on the left).
-    *   You'll see the "Integration Sessions" view. A "Default Session" is created for you if none exist from previous use.
+    *   Click the **File Integrator icon** in the Activity Bar.
+    *   You'll see the "Integration Sessions" view. A "Default Session" is created if none exist.
 
 2.  **Manage Sessions:**
-    *   **Create:** Click the `➕` (Add) icon in the view's title bar. Enter a name for your new session.
-    *   **Rename:** Right-click on a session name in the list and select "Rename Session".
-    *   **Remove:** Right-click on a session name and select "Remove Session" (requires confirmation).
+    *   **Create:** Click the `➕` icon in the view's title bar.
+    *   **Rename:** Right-click a session name -> "Rename Session".
+    *   **Remove:** Right-click a session name -> "Remove Session" (requires confirmation).
 
-3.  **Add Files & Folders:**
-    *   Drag files or entire directories from the VS Code **Explorer** view.
-    *   Drop them **directly onto the desired Session item** in the File Integrator view.
-    *   Watch the item count next to the session name update! Files matching your exclusion patterns will be automatically skipped.
+3.  **Add Resources:**
+    *   **Method 1: Drag & Drop (Files/Folders):**
+        *   Drag files or directories from the VS Code **Explorer**.
+        *   Drop them onto the desired **Session item**.
+        *   Exclusions defined in settings will apply here.
+    *   **Method 2: Add Active Editor (Any Resource):**
+        *   Open the file or resource you want to add in a VS Code editor tab (e.g., a local file, a Java library source).
+        *   In the File Integrator view, hover over the desired **Session item**.
+        *   Click the `➕` (Add Active Editor) icon that appears inline.
+        *   The active editor's resource will be added to the session root. (Exclusions do *not* apply here).
 
 4.  **View & Reorder Items:**
-    *   Click the arrow next to a session name to expand it and see the tree view of added files and directories.
-    *   **To Reorder:** Click and drag a file or folder *within the same level* (e.g., two files directly under the session, or two files inside the same added folder) and drop it above or below another item at that level. The order will update visually and be saved.
+    *   Expand a session (`▶`) to see its contents.
+    *   **Reorder:** Drag an item within the same level and drop it above/below another item. The order is saved.
 
-5.  **Generate, Copy, Clear (Per Session):**
-    *   Hover over a **Session item** to reveal inline action icons:
-        *   📄 `$(markdown)` (Generate Code Block): Creates (if needed) and opens an editable Markdown document containing the paths and content for *this session*, respecting the current file order.
-        *   📋 `$(copy)` (Copy to Clipboard): Copies the formatted Markdown content for *this session* (respecting order) directly to your clipboard.
-        *   🗑️ `$(clear-all)` (Clear Session): Removes *all* tracked files and directories from *this session* (requires confirmation).
-    *   You can also access these actions by right-clicking the Session item.
+5.  **Session Actions (Inline Icons):**
+    *   Hover over a **Session item** to see icons:
+        *   `➕` (Add Active Editor): Adds the currently active editor tab to *this* session.
+        *   `📄` (Generate Code Block): Creates/opens an editable Markdown document for *this* session (respecting item order).
+        *   `📋` (Copy to Clipboard): Copies the formatted Markdown content for *this* session (respecting order) to the clipboard.
+        *   `🗑️` (Clear Session): **Immediately** removes *all* items from *this* session (no confirmation).
 
 6.  **Remove Individual Items:**
     *   Expand a session.
-    *   Hover over a specific file or directory *within* the session.
-    *   Click the `❌` (Close) icon that appears to remove just that item and its children (if it's a directory).
+    *   Hover over a specific item within the session.
+    *   Click the `❌` (Remove Item) icon that appears.
 
 7.  **Edit Generated Code (Optional):**
-    *   After clicking "Generate Code Block", the Markdown file opens. Feel free to edit the content (e.g., remove irrelevant parts, add comments) before copying or saving it. The generated document is temporary; changes won't affect the session itself.
+    *   The document opened by "Generate Code Block" is temporary. Edit it freely before copying/saving. Changes here don't affect the session.
 
-## Configuring Exclusions 🚫
+## Configuring Exclusions (Drag & Drop Only) 🚫
 
-Prevent common unwanted files/folders (like `node_modules`, `.git`, build artifacts) from being added automatically during drag-and-drop!
+Prevent unwanted files/folders from being added **when dragging from the Explorer**. Note: Exclusions do **not** apply when using the "Add Active Editor" button.
 
-1.  Open your VS Code Settings (Ctrl+, or Cmd+,).
-2.  You can edit either your global **User `settings.json`** or your project-specific **Workspace `.vscode/settings.json`**.
-3.  Search for `"File Integrator Exclude"` or directly add/edit the `fileintegrator.exclude` object.
-4.  Use **glob patterns** (similar to `.gitignore`) as keys and set the value to `true` to exclude matching items.
+1.  Open VS Code Settings (Ctrl+, or Cmd+,).
+2.  Edit User or Workspace `settings.json`.
+3.  Add/edit the `fileintegrator.exclude` object. Use glob patterns as keys and `true` as the value.
 
 **Example `settings.json`:**
 
@@ -88,40 +92,21 @@ Prevent common unwanted files/folders (like `node_modules`, `.git`, build artifa
   // ... other settings ...
 
   "fileintegrator.exclude": {
-    // --- Common Defaults (Feel free to customize!) ---
-    "**/.git": true,           // Git repository metadata
-    "**/.svn": true,           // Subversion metadata
-    "**/.hg": true,           // Mercurial metadata
-    "**/CVS": true,           // CVS metadata
-    "**/.DS_Store": true,     // macOS specific
-    "**/node_modules": true,  // Node.js dependencies
-    "**/bower_components": true,// Bower dependencies
-    "**/__pycache__": true,  // Python bytecode cache
-    "**/*.pyc": true,         // Python compiled files
-    "**/target": true,        // Common Java/Maven build output
-    "**/bin": true,           // Common compiled output/scripts
-    "**/build": true,         // Common build output folder
-    "**/.gradle": true,       // Gradle cache/metadata
-    "**/.idea": true,         // IDE metadata (IntelliJ)
-    "**/.vscode": true,       // VS Code workspace settings (usually don't want this in context)
-
-    // --- Custom Examples ---
-    "**/dist": true,          // Exclude common distribution folders
-    "**/*.log": true,         // Exclude all log files anywhere
-    "**/temp/**": true,       // Exclude anything under any 'temp' folder
-    ".env": true,             // Exclude .env file at the root
-    "**/secrets.json": true,  // Exclude specific file name anywhere
-    "docs/internal": true     // Exclude a specific folder relative to workspace root
+    "**/.git": true,
+    "**/node_modules": true,
+    "**/target": true,
+    "**/build": true,
+    "**/*.log": true
+    // Add your own patterns...
   }
 }
 ```
 
 **Glob Pattern Tips:**
 
--   `**` : Matches any number of directories (including zero).
--   `*` : Matches any number of characters except `/`.
--   `?` : Matches a single character except `/`.
--   Use `/` as the path separator (even on Windows).
+-   `**` : Matches multiple directories.
+-   `*` : Matches characters except `/`.
+-   Use `/` as the path separator.
 
 ## Requirements
 
@@ -129,26 +114,34 @@ Prevent common unwanted files/folders (like `node_modules`, `.git`, build artifa
 
 ## Known Issues & Considerations
 
--   **External File Changes:** If you rename, move, or delete a file/folder *outside* of VS Code after adding it to a session, the link in the File Integrator view will become stale. Generating content or trying to open the file will likely show an error for that specific item. You will need to manually remove the stale item from the session using the `❌` icon.
--   **Binary Files:** Primarily designed for text files (UTF-8). Content display for binary files or files with other encodings may be incorrect or appear as garbled text in the generated output.
--   **Performance:** While generally fast, adding extremely large directories or generating content for sessions with many very large files might take a noticeable moment.
--   **Reordering Scope:** Drag-and-drop reordering currently works only between items at the *same level* (siblings). You cannot yet drag an item directly into a different folder within the view.
+-   **External Resource Changes:** If a resource (file, folder, item in an archive) added to a session is changed, moved, or deleted *externally*, the link in the File Integrator view becomes stale. Generating content or opening it may fail. Remove stale items manually (`❌`).
+-   **Binary Files:** Content display for binary files may be incorrect.
+-   **Performance:** Adding large directories or generating content for sessions with many very large files might take time.
+-   **Reordering Scope:** Drag-and-drop reordering only works between items at the same level (siblings).
 
 ## Release Notes
 
-### 0.0.7 (Latest)
+### 0.0.8 (Latest)
 
--   **🚀 Feature:** **Full Session Persistence!** Sessions now save and restore their complete state, including the list of files/directories, their hierarchy, and their user-defined order, across VS Code restarts.
--   **⚙️ Refactor:** Updated persistence logic for robustness and added migration from older versions.
--   **⚙️ Refactor:** Content generation (`generateMarkdownContent`) is now fully asynchronous and reads file content on demand if not already loaded (e.g., after restart).
--   **Fix:** Resolved TypeScript compilation errors related to persistence loading.
--   **Perf:** Changed activation event to `onView:fileIntegratorView` for faster VS Code startup (lazy loading).
--   **Docs:** Updated README to reflect persistence and latest features.
+-   **🚀 Feature:** **URI Support!** Can now add resources beyond simple files (e.g., files inside JARs/archives) using the "Add Active Editor" button.
+-   **✨ Feature:** **Add Active Editor!** New inline button `➕` on session items to quickly add the current editor's content.
+-   **👓 UI:** Improved display for non-file URIs (like archives) in tree view and generated output.
+-   **UI:** Removed confirmation dialog when clearing a session.
+-   **Fix:** Tree view now reliably updates when adding items via "Add Active Editor".
+-   **Refactor:** Core logic updated to use URIs as primary identifiers.
+-   **Refactor:** Persistence layer updated to store URIs; includes migration from v1/v2. Storage key version bumped to v3.
+
+### 0.0.7
+
+-   **Feature:** Full Session Persistence (Path-based in this version). Sessions saved/restored their file list, hierarchy, and order.
+-   **Refactor:** Content generation became async, loading content on demand.
+-   **Fix:** Resolved TypeScript compilation errors.
+-   **Perf:** Changed activation event to `onView:fileIntegratorView`.
 
 ### 0.0.6
 
--   **Added:** Drag-and-Drop Reordering! Prioritize files/directories within a session's view. The order is respected in generated/copied output. (Limited to sibling reordering).
--   **Changed:** Internal storage now uses an Array to maintain user-defined order.
+-   **Added:** Drag-and-Drop Reordering (sibling level).
+-   **Changed:** Internal storage switched to Array for order preservation.
 
 ### 0.0.5
 
