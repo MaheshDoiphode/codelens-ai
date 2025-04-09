@@ -1,8 +1,8 @@
 {
   "name": "fileintegrator",
   "displayName": "File Integrator",
-  "description": "Integrates content from multiple files/directories via drag-and-drop sessions.",
-  "version": "0.0.6",
+  "description": "Integrates content from multiple files/directories via drag-and-drop sessions with persistence.",
+  "version": "0.0.7", 
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -10,7 +10,7 @@
     "Other"
   ],
   "activationEvents": [
-    
+     "onView:fileIntegratorView"
   ],
   "main": "./out/extension.js",
   "dependencies": {
@@ -53,10 +53,10 @@
             "**/.project": true,
             "**/.settings": true,
             "**/*.class": true,
-            "**/target": true, 
-            "**/bin": true,    
+            "**/target": true,
+            "**/bin": true,
             "**/build": true,
-            "**/.vscode": true 
+            "**/.vscode": true
           },
           "additionalProperties": {
             "type": "boolean",
@@ -125,59 +125,57 @@
       ]
     },
     "menus": {
-  "view/title": [
-    {
-      "command": "fileintegrator.addSession",
-      "when": "view == fileIntegratorView",
-      "group": "navigation@1"
-    },
-    {
-      "command": "fileintegrator.refreshView",
-      "when": "view == fileIntegratorView",
-      "group": "navigation@2"
+      "view/title": [
+        {
+          "command": "fileintegrator.addSession",
+          "when": "view == fileIntegratorView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "fileintegrator.refreshView",
+          "when": "view == fileIntegratorView",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "fileintegrator.generateCodeBlock",
+          "when": "view == fileIntegratorView && viewItem == session",
+          "group": "inline@1"
+        },
+        {
+          "command": "fileintegrator.copyToClipboard",
+          "when": "view == fileIntegratorView && viewItem == session",
+          "group": "inline@2"
+        },
+        {
+          "command": "fileintegrator.clearSession",
+          "when": "view == fileIntegratorView && viewItem == session",
+          "group": "inline@3"
+        },
+        {
+          "command": "fileintegrator.renameSession",
+          "when": "view == fileIntegratorView && viewItem == session",
+          "group": "1_modification@1"
+        },
+        {
+          "command": "fileintegrator.removeSession",
+          "when": "view == fileIntegratorView && viewItem == session",
+          "group": "1_modification@2"
+        },
+        {
+          "command": "fileintegrator.removeFile",
+          "when": "view == fileIntegratorView && (viewItem == file || viewItem == directory)",
+          "group": "inline@1"
+        },
+        {
+          "command": "vscode.open",
+          "when": "view == fileIntegratorView && viewItem == file",
+          "group": "navigation",
+          "args": ["{{resourceUri}}"]
+        }
+      ]
     }
-  ],
-  "view/item/context": [
-    {
-      "command": "fileintegrator.generateCodeBlock",
-      "when": "view == fileIntegratorView && viewItem == session",
-      "group": "inline@1"
-    },
-    {
-      "command": "fileintegrator.copyToClipboard",
-      "when": "view == fileIntegratorView && viewItem == session",
-      "group": "inline@2"
-    },
-    {
-      "command": "fileintegrator.clearSession",
-      "when": "view == fileIntegratorView && viewItem == session",
-      "group": "inline@3" 
-    },
-
-    {
-      "command": "fileintegrator.renameSession",
-      "when": "view == fileIntegratorView && viewItem == session",
-      "group": "1_modification@1"
-    },
-    {
-      "command": "fileintegrator.removeSession",
-      "when": "view == fileIntegratorView && viewItem == session",
-      "group": "1_modification@2"
-    },
-    {
-      "command": "fileintegrator.removeFile",
-      "when": "view == fileIntegratorView && (viewItem == file || viewItem == directory)",
-      "group": "inline@1" 
-    },
-
-    {
-      "command": "vscode.open",
-      "when": "view == fileIntegratorView && viewItem == file",
-      "group": "navigation",
-      "args": ["{{resourceUri}}"]
-    }
-  ]
-}
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
