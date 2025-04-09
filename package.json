@@ -2,7 +2,7 @@
   "name": "fileintegrator",
   "displayName": "File Integrator",
   "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence.",
-  "version": "0.0.8",
+  "version": "0.0.7",
   "engines": {
     "vscode": "^1.97.0"
   },
