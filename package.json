@@ -2,7 +2,7 @@
   "name": "fileintegrator",
   "displayName": "File Integrator",
   "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence.",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -110,6 +110,11 @@
         "command": "fileintegrator.addActiveEditorToSession",
         "title": "Add Active Editor to Session",
         "icon": "$(add)"
+      },
+      {
+        "command": "fileintegrator.addAllOpenEditorsToSession",
+        "title": "Add All Open Editors to Session",
+        "icon": "$(window)"
       }
     ],
     "viewsContainers": {
@@ -135,8 +140,7 @@
           "command": "fileintegrator.addSession",
           "when": "view == fileIntegratorView",
           "group": "navigation@1"
-        },
-        {
+        },        {
           "command": "fileintegrator.refreshView",
           "when": "view == fileIntegratorView",
           "group": "navigation@2"
@@ -147,6 +151,11 @@
           "command": "fileintegrator.addActiveEditorToSession",
           "when": "view == fileIntegratorView && viewItem == session",
           "group": "inline@0"
+        },
+        {
+          "command": "fileintegrator.addAllOpenEditorsToSession",
+          "when": "view == fileIntegratorView && viewItem == session",
+          "group": "inline@0.5"
         },
         {
           "command": "fileintegrator.generateCodeBlock",

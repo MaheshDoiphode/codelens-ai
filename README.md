@@ -15,17 +15,18 @@ Tired of manually copying and pasting code from various files and sources? File 
 
 -   **💾 Full Session Persistence:** Your sessions, the resources within them (identified by URI), their hierarchy, and their custom order are **saved and restored** automatically when you restart VS Code.
 -   **✨ Multiple Sessions:** Create, rename, and manage independent sessions to organize different sets of resources logically.
--   **🔗 Add Active Editor:** Quickly add the currently focused editor tab (including library files, decompiled sources, etc.) to a session using a dedicated inline button.
+-   **➕ Add Active Editor:** Quickly add the currently focused editor tab to a session using an inline button.
+-   **🪟 Add All Open Editors:** Add all unique open editor tabs to a specific session using an inline button (excludes duplicates and the session's own generated document).
 -   **🖱️ Drag & Drop:** Add standard files or entire directories just by dragging them from the VS Code Explorer onto a session.
 -   **↕️ Reorder Items:** Easily drag and drop resources *within* a session's level to change their order. This order is saved and used when generating output.
 -   **🌲 Hierarchical View:** Added directories retain their structure within the session view.
--   **👓 Improved Display:** URIs for library files (e.g., inside JARs/ZIPs) are shown concisely in the tree view and informatively in generated output.
+-   **👓 Improved Display:** Resources in the tree view show their base name (e.g., `MyClass.java`) as the primary label and the contextual path (e.g., `my-library.jar!/.../mypackage`) as the description. Full path visible in tooltip.
 -   **🖱️ Click to Open:** Single-click any file or resource item in the tree view to open it directly in the editor.
 -   **⚙️ Customizable Exclusions:** Define glob patterns (`fileintegrator.exclude`) to ignore unwanted files/folders during **drag-and-drop** from the Explorer.
--   ⚡ **Per-Session Actions:** Quickly Add Active Editor, Generate, Copy, or Clear content for specific sessions using inline icons.
+-   ⚡ **Per-Session Actions:** Quickly Add Active Editor, Add All Open Editors, Generate, Copy, or Clear content for specific sessions using inline icons.
 -   **📄 On-Demand Generation:** Create a clean, editable Markdown document showing resource identifiers and content *only* when you click "Generate Code Block".
 -   **📋 Easy Copying:** Copy the entire formatted Markdown block for a session (respecting order) to your clipboard with a single click.
--   **❌ Fine-Grained Removal:** Remove individual resources or directories from a session easily.
+-   **❌ Fine-Grained Removal:** Remove individual resources or directories (and their children) from a session easily.
 -   **💨 Asynchronous & Responsive:** Built with async operations to keep your editor snappy.
 
 ## Installation 💻
@@ -53,14 +54,22 @@ Tired of manually copying and pasting code from various files and sources? File 
         *   Drag files or directories from the VS Code **Explorer**.
         *   Drop them onto the desired **Session item**.
         *   Exclusions defined in settings will apply here.
-    *   **Method 2: Add Active Editor (Any Resource):**
-        *   Open the file or resource you want to add in a VS Code editor tab (e.g., a local file, a Java library source).
+    *   **Method 2: Add Active Editor (Single Resource):**
+        *   Open the file or resource you want to add in a VS Code editor tab.
         *   In the File Integrator view, hover over the desired **Session item**.
         *   Click the `➕` (Add Active Editor) icon that appears inline.
-        *   The active editor's resource will be added to the session root. (Exclusions do *not* apply here).
+        *   (Exclusions do *not* apply here).
+    *   **Method 3: Add All Open Editors (Multiple Resources):**
+        *   Have multiple relevant files open in editor tabs.
+        *   In the File Integrator view, hover over the desired **Session item**.
+        *   Click the `🪟` (Add All Open Editors) icon that appears inline.
+        *   All unique open editors (excluding duplicates, items already in the session, and the session's generated document) will be added to the session root.
+        *   (Exclusions do *not* apply here).
 
 4.  **Interact with Items:**
     *   Expand a session (`▶`) to see its contents.
+    *   The primary label shows the resource name (e.g., `MyClass.java`).
+    *   The grey text description next to it shows context (e.g., `my-library.jar!/.../mypackage`).
     *   **Open Item:** Single-click any file or resource item (non-directory) to open it in the editor.
     *   **Expand/Collapse Directory:** Single-click a directory item (`▶`/`▼`) to toggle its children.
     *   **Reorder:** Drag an item within the same level and drop it above/below another item. The order is saved.
@@ -68,6 +77,7 @@ Tired of manually copying and pasting code from various files and sources? File 
 5.  **Session Actions (Inline Icons):**
     *   Hover over a **Session item** to see icons:
         *   `➕` (Add Active Editor): Adds the currently active editor tab to *this* session.
+        *   `🪟` (Add All Open Editors): Adds all unique open editor tabs to *this* session.
         *   `📄` (Generate Code Block): Creates/opens an editable Markdown document for *this* session (respecting item order).
         *   `📋` (Copy to Clipboard): Copies the formatted Markdown content for *this* session (respecting order) to the clipboard.
         *   `🗑️` (Clear Session): **Immediately** removes *all* items from *this* session (no confirmation).
@@ -82,7 +92,7 @@ Tired of manually copying and pasting code from various files and sources? File 
 
 ## Configuring Exclusions (Drag & Drop Only) 🚫
 
-Prevent unwanted files/folders from being added **when dragging from the Explorer**. Note: Exclusions do **not** apply when using the "Add Active Editor" button.
+Prevent unwanted files/folders from being added **when dragging from the Explorer**. Note: Exclusions do **not** apply when using the "Add Active Editor" or "Add All Open Editors" buttons.
 
 1.  Open VS Code Settings (Ctrl+, or Cmd+,).
 2.  Edit User or Workspace `settings.json`.
@@ -124,7 +134,14 @@ Prevent unwanted files/folders from being added **when dragging from the Explore
 
 ## Release Notes
 
-### 0.0.7 (Latest)
+### 0.0.8 (Latest)
+
+-   **✨ Feature: Add All Open Editors!** New inline button `🪟` on session items adds all unique open editor tabs to that specific session. Skips duplicates, already included items, and the session's own generated document.
+-   **Refactor:** Moved "Add All Open Editors" command from view title to session item context menu (inline).
+-   **Refactor:** Code comment cleanup for better readability.
+
+### 0.0.7
+
 -   **🚀 Feature: URI Support!** Can now add resources beyond simple files (e.g., files inside JARs/archives, untitled files) using the "Add Active Editor" button. Core logic updated to use URIs as primary identifiers.
 -   **✨ Feature: Add Active Editor!** New inline button `➕` on session items to quickly add the current editor's content without prompts.
 -   **✨ Feature: Click to Open!** Single-clicking file/resource items in the tree view now directly opens them in the editor.
