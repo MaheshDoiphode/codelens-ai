@@ -122,12 +122,22 @@
       },
       {
         "command": "fileintegrator.generateDiffDocument",
-        "title": "Generate Diff Document (vs HEAD)",
+        "title": "Generate Diff Document (Session vs HEAD)",
         "icon": "$(git-compare)"
       },
       {
         "command": "fileintegrator.copyDiffToClipboard",
-        "title": "Copy Diff to Clipboard (vs HEAD)",
+        "title": "Copy Diff to Clipboard (Session vs HEAD)",
+        "icon": "$(clippy)"
+      },
+      {
+        "command": "fileintegrator.generateDirectoryDiffDocument",
+        "title": "Generate Diff (Directory vs HEAD)",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "fileintegrator.copyDirectoryDiffToClipboard",
+        "title": "Copy Diff (Directory vs HEAD)",
         "icon": "$(clippy)"
       }
     ],
@@ -188,14 +198,14 @@
           "group": "inline@3"
         },
         {
-            "command": "fileintegrator.generateDiffDocument",
-            "when": "view == fileIntegratorView && viewItem == session",
-            "group": "2_diff@1"
+          "command": "fileintegrator.generateDiffDocument",
+          "when": "view == fileIntegratorView && viewItem == session",
+          "group": "2_diff@1"
         },
         {
-            "command": "fileintegrator.copyDiffToClipboard",
-            "when": "view == fileIntegratorView && viewItem == session",
-            "group": "2_diff@2"
+          "command": "fileintegrator.copyDiffToClipboard",
+          "when": "view == fileIntegratorView && viewItem == session",
+          "group": "2_diff@2"
         },
         {
           "command": "fileintegrator.renameSession",
@@ -208,9 +218,19 @@
           "group": "3_modification@2"
         },
         {
+          "command": "fileintegrator.generateDirectoryDiffDocument",
+          "when": "view == fileIntegratorView && viewItem == resourceDirectory",
+          "group": "inline@1"
+        },
+        {
+          "command": "fileintegrator.copyDirectoryDiffToClipboard",
+          "when": "view == fileIntegratorView && viewItem == resourceDirectory",
+          "group": "inline@2"
+        },
+        {
           "command": "fileintegrator.removeItem",
           "when": "view == fileIntegratorView && (viewItem == resourceFile || viewItem == resourceDirectory)",
-          "group": "inline@1"
+          "group": "inline@3"
         },
         {
           "command": "vscode.open",
