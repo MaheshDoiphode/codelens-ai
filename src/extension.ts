@@ -4,6 +4,9 @@ import * as fs from 'fs-extra';
 import { v4 as uuidv4 } from 'uuid';
 import { minimatch } from 'minimatch';
 
+// Import Git API Types (Ensure src/api/git.d.ts has SourceControlHistoryItem import removed if needed for your vscode version)
+import { GitExtension, API as GitAPI, Repository as GitRepository } from './api/git';
+
 // --- Core Data Structures ---
 
 interface FileEntry {
@@ -87,10 +90,16 @@ class SessionResourceStorage {
                 canRecurse = isDirectory;
                 if (!isDirectory) {
                     try {
-                        content = await fs.readFile(uri.fsPath, 'utf8');
+                        // Don't read large files initially
+                        if (stats.size < 1 * 1024 * 1024) { // e.g., < 1MB
+                           content = await fs.readFile(uri.fsPath, 'utf8');
+                        } else {
+                            console.warn(`[Storage:addResource] File too large for initial read, load on demand: ${uri.fsPath}`);
+                            content = null; // Load on demand
+                        }
                     } catch (readErr: any) {
                         console.warn(`[Storage:addResource] Failed initial read ${uri.fsPath}: ${readErr.message}`);
-                        // Content remains null, loaded later via VS Code API
+                        content = null; // Load on demand
                     }
                 }
             } else {
@@ -139,10 +148,11 @@ class SessionResourceStorage {
                 await Promise.all(processingPromises);
             } catch (readDirError: any) {
                 console.error(`[Storage:addResource] Error reading directory ${uri.fsPath}:`, readDirError);
-                return false; // Indicate partial success/failure
+                // Don't necessarily fail the whole add operation if a subdirectory fails
+                // return false;
             }
         }
-        return true; // Added successfully
+        return true; // Added successfully (or partially if subdir failed)
     }
 
     /** Removes entry and its descendants recursively. */
@@ -159,6 +169,7 @@ class SessionResourceStorage {
             const currentUri = queue.shift()!;
             if (removedUris.has(currentUri)) continue;
             removedUris.add(currentUri);
+            // Find children based on parentUriString link
             this._files.forEach(f => {
                 if (f.parentUriString === currentUri) {
                     queue.push(f.uriString);
@@ -214,20 +225,21 @@ class SessionResourceStorage {
         // Determine insertion index
         let targetIndex = -1;
         if (dropOnSession) {
-            // Find first root item's index, or end of list if no root items exist after removal
+            // Dropped onto the session node: Insert at the beginning of root items
             targetIndex = this._files.findIndex(f => f.parentUriString === undefined);
-            if (targetIndex === -1) targetIndex = this._files.length;
+            if (targetIndex === -1) targetIndex = this._files.length; // If no root items, insert at end
         } else if (targetUriString) {
-            // Find index of the item dropped onto
+            // Dropped onto another item: Insert *before* that item
             targetIndex = this._files.findIndex(f => f.uriString === targetUriString);
             if (targetIndex === -1) {
                 console.error(`[Storage:reorder] Target URI not found after removal: ${targetUriString}`);
-                this._files.push(...draggedEntries); // Put back at end as fallback
+                // Fallback: Put back at end
+                this._files.push(...draggedEntries);
                 return false;
             }
         } else {
-            // Dropped in empty space within a parent group: find last item of that group + 1
-            const parentUri = firstParentUri;
+            // Dropped in empty space within a parent group: Insert at the end of that group
+            const parentUri = firstParentUri; // The parent of the items being dragged
             let lastIndexOfParentGroup = -1;
             for(let i = this._files.length - 1; i >= 0; i--) {
                 if (this._files[i].parentUriString === parentUri) {
@@ -235,6 +247,7 @@ class SessionResourceStorage {
                     break;
                 }
             }
+            // Insert after the last item of the group
             targetIndex = lastIndexOfParentGroup + 1;
         }
 
@@ -530,52 +543,51 @@ class ResourceItem extends vscode.TreeItem {
         const uri = vscode.Uri.parse(entry.uriString);
         let label = ''; // This will be just the base name
 
-        // --- Extract Base Name for Label ---
+        // Extract Base Name for Label
         const uriPath = uri.path;
-        const bangIndex = uriPath.lastIndexOf('!/');
+        const bangIndex = uri.toString().lastIndexOf('!/'); // Use toString() to reliably find !/
 
         if (bangIndex !== -1) {
-            // It's an archive path (e.g., jar:...!/path/to/file.java or file:...!/path/to/file.java)
-            const internalPath = uriPath.substring(bangIndex + 1);
-            // Remove leading slash if present before getting basename
+            const fullUriStr = uri.toString();
+            const internalPath = fullUriStr.substring(bangIndex + 1);
             label = path.basename(internalPath.startsWith('/') ? internalPath.substring(1) : internalPath);
         } else {
             // Standard path (file:, untitled:, git:, etc.)
-            label = path.basename(uriPath);
+             label = path.basename(uriPath);
         }
 
-        // Handle cases where basename might be empty or unhelpful (e.g., untitled:, root paths)
+        // Handle cases where basename might be empty or unhelpful
         if (!label && uri.scheme !== 'file') {
-            label = uri.toString().substring(uri.scheme.length + 1); // Use scheme-specific part
-            if (label.startsWith('//')) label = label.substring(2); // Remove authority slashes if present
+            label = uri.toString().substring(uri.scheme.length + 1);
+            if (label.startsWith('//')) label = label.substring(2);
         }
-        // Final fallback if label is still empty
-        if (!label) label = entry.uriString; // Fallback to full URI string if basename fails
-        // --- End of Label Extraction ---
+        if (!label) label = entry.uriString; // Fallback to full URI string
 
-        // Initialize TreeItem with the extracted base name as the label
+        // Initialize TreeItem
         super(label, collapsibleState);
 
-        // --- Set Other Properties ---
-        this.id = `${entry.sessionId}::${entry.uriString}`; // Unique ID for the tree item
-        this.resourceUri = uri; // The actual URI, essential for commands like 'vscode.open'
+        // Set Other Properties
+        this.id = `${entry.sessionId}::${entry.uriString}`;
+        this.resourceUri = uri;
 
-        // Set command to open non-directory items on click
         if (!entry.isDirectory) {
             this.command = {
                 command: 'vscode.open',
                 title: "Open Resource",
                 arguments: [uri]
             };
-            this.collapsibleState = vscode.TreeItemCollapsibleState.None; // Non-directories aren't expandable
+            this.collapsibleState = vscode.TreeItemCollapsibleState.None;
         }
 
-        // Tooltip shows full path/URI
-        this.tooltip = `${entry.isDirectory ? 'Directory' : 'Resource'}:\n${getDisplayUri(entry.uriString, 'tooltip')}`;
-        // Description shows shortened contextual path (next to the label)
-        this.description = getDisplayUri(entry.uriString, 'treeDescription');
+        // Update Tooltips for Clarity
+        if (entry.isDirectory) {
+             this.tooltip = `Directory (Git Diff applies to tracked files within):\n${getDisplayUri(entry.uriString, 'tooltip')}`;
+        } else {
+             this.tooltip = `Resource (Git Diff applies if tracked):\n${getDisplayUri(entry.uriString, 'tooltip')}`;
+        }
 
-        this.contextValue = entry.isDirectory ? 'resourceDirectory' : 'resourceFile'; // For context menus
+        this.description = getDisplayUri(entry.uriString, 'treeDescription');
+        this.contextValue = entry.isDirectory ? 'resourceDirectory' : 'resourceFile';
         this.iconPath = entry.isDirectory ? vscode.ThemeIcon.Folder : vscode.ThemeIcon.File;
     }
 
@@ -777,26 +789,55 @@ class FileIntegratorProvider implements vscode.TreeDataProvider<IntegratorTreeIt
 let sessionManager: SessionManager;
 let fileIntegratorProvider: FileIntegratorProvider;
 let treeView: vscode.TreeView<IntegratorTreeItem>;
+let gitAPI: GitAPI | undefined; // Store the Git API instance
 
-export function activate(context: vscode.ExtensionContext) {
+export async function activate(context: vscode.ExtensionContext) {
     console.log('Activating File Integrator...');
 
+    // Get Git API
+    try {
+        const gitExtension = vscode.extensions.getExtension<GitExtension>('vscode.git');
+        if (gitExtension) {
+            if (!gitExtension.isActive) {
+                 console.log('File Integrator: Activating vscode.git extension...');
+                 await gitExtension.activate();
+            }
+            gitAPI = gitExtension.exports.getAPI(1);
+            if (gitAPI) {
+                // Removed logging API version
+                console.log(`File Integrator: Successfully obtained Git API.`);
+                 gitAPI.repositories.forEach(repo => console.log(`  Found Git repo: ${repo.rootUri.fsPath}`));
+                 gitAPI.onDidOpenRepository(repo => console.log(`  Git repo opened: ${repo.rootUri.fsPath}`));
+                 gitAPI.onDidCloseRepository(repo => console.log(`  Git repo closed: ${repo.rootUri.fsPath}`));
+            } else {
+                 console.error('File Integrator: Failed to get Git API (getAPI(1) returned undefined).');
+                 vscode.window.showWarningMessage('File Integrator: Could not initialize Git features. Failed to get Git API.');
+            }
+        } else {
+            console.warn('File Integrator: vscode.git extension not found.');
+            vscode.window.showWarningMessage('File Integrator: vscode.git extension not found. Git diff features will be unavailable.');
+        }
+    } catch (error) {
+        console.error('File Integrator: Failed to get or activate Git API:', error);
+        vscode.window.showWarningMessage('File Integrator: Could not initialize Git features. The vscode.git extension might be disabled or encountered an error.');
+    }
+
+    // Initialize SessionManager, Provider, TreeView
     sessionManager = new SessionManager(context);
-    sessionManager.loadSessions(); // Load persisted sessions, handles migration
+    sessionManager.loadSessions();
 
     fileIntegratorProvider = new FileIntegratorProvider(sessionManager);
 
     treeView = vscode.window.createTreeView('fileIntegratorView', {
         treeDataProvider: fileIntegratorProvider,
-        dragAndDropController: fileIntegratorProvider, // Enable drag/drop functionality
-        showCollapseAll: true, // Add collapse all button to view
-        canSelectMany: true // Allow multi-select in the tree
+        dragAndDropController: fileIntegratorProvider,
+        showCollapseAll: true,
+        canSelectMany: true
     });
 
     context.subscriptions.push(treeView);
     registerCommands(context); // Register all commands
 
-    // Ensure session manager cleans up on extension deactivation
     context.subscriptions.push({ dispose: () => sessionManager.dispose() });
 
     console.log('File Integrator activated.');
@@ -805,42 +846,37 @@ export function activate(context: vscode.ExtensionContext) {
 // --- Command Registration ---
 
 function registerCommands(context: vscode.ExtensionContext) {
-    // Helper to simplify command registration
     const register = (commandId: string, callback: (...args: any[]) => any) => {
         context.subscriptions.push(vscode.commands.registerCommand(commandId, callback));
     };
 
     // Command: Add New Session
     register('fileintegrator.addSession', async () => {
-        const n = await vscode.window.showInputBox({ prompt: "Enter new session name", value: `Session ${sessionManager.getAllSessions().length + 1}` });
+        const n = await vscode.window.showInputBox({ prompt: "Enter new session name", value: `Session ${sessionManager.getAllSessions().length + 1}`, placeHolder: "New Session Name" });
         if (n && n.trim()) {
             const s = sessionManager.createSession(n.trim());
             fileIntegratorProvider.refresh();
-            // Reveal and select the new session in the tree
-            treeView.reveal(new SessionItem(s), { select: true, focus: true, expand: true });
+            await treeView.reveal(new SessionItem(s), { select: true, focus: true, expand: vscode.TreeItemCollapsibleState.Expanded });
         }
     });
 
-    // Command: Remove Session (takes optional SessionItem from context menu)
+    // Command: Remove Session
     register('fileintegrator.removeSession', async (item?: SessionItem) => {
-        // If triggered without context, prompt user to select session
         const s = item?.session ?? await selectSession('Select session to remove');
         if (!s) return;
-
-        const c = await vscode.window.showWarningMessage(`Remove session "${s.name}"?`, { modal: true }, 'Yes', 'No');
+        const c = await vscode.window.showWarningMessage(`Remove session "${s.name}" and its ${s.storage.files.length} item links? (Files are not deleted)`, { modal: true }, 'Yes', 'No');
         if (c === 'Yes') {
-            await s.closeAssociatedDocument(true); // Try to close the generated doc editor
+            await s.closeAssociatedDocument(true);
             if (sessionManager.removeSession(s.id)) {
                 fileIntegratorProvider.refresh();
             }
         }
     });
 
-    // Command: Rename Session (takes optional SessionItem from context menu)
+    // Command: Rename Session
     register('fileintegrator.renameSession', async (item?: SessionItem) => {
         const s = item?.session ?? await selectSession('Select session to rename');
         if (!s) return;
-
         const n = await vscode.window.showInputBox({ prompt: `Enter new name for "${s.name}"`, value: s.name });
         if (n && n.trim() && n.trim() !== s.name) {
             if (sessionManager.renameSession(s.id, n.trim())) {
@@ -849,80 +885,69 @@ function registerCommands(context: vscode.ExtensionContext) {
         }
     });
 
-    // Command: Clear All Items from Session (takes optional SessionItem from context menu)
+    // Command: Clear All Items from Session
     register('fileintegrator.clearSession', async (item?: SessionItem) => {
         const s = item?.session ?? await selectSession('Select session to clear');
         if (!s) return;
-
         if (s.storage.files.length === 0) {
             vscode.window.showInformationMessage(`Session "${s.name}" is already empty.`);
             return;
         }
         console.log(`[ClearSession] Clearing session "${s.name}" (ID: ${s.id})`);
-        s.storage.clearFiles(); // Clears the session's storage array
-        sessionManager.persistSessions(); // Save the now-empty session
+        const count = s.storage.clearFiles();
+        sessionManager.persistSessions();
         fileIntegratorProvider.refresh();
-        await updateCodeBlockDocument(s); // Update the associated doc (will show empty state)
+        await updateCodeBlockDocument(s);
+        vscode.window.showInformationMessage(`Cleared ${count} items from session "${s.name}".`);
     });
 
-    // Command: Generate/Show Code Block Document (takes optional SessionItem from context menu)
+    // Command: Generate/Show Code Block Document
     register('fileintegrator.generateCodeBlock', async (item?: SessionItem) => {
         const s = item?.session ?? await selectSession('Select session to generate code block for');
         if (!s) return;
-
         if (s.storage.resourcesOnly.length === 0) {
             vscode.window.showInformationMessage(`Session "${s.name}" contains no file/resource content.`);
             return;
         }
-        // showCodeBlockDocument handles creating/updating and linking the document
         const doc = await showCodeBlockDocument(s);
         if (doc) {
-            // Show the generated/updated document to the user
             await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false });
         }
     });
 
-    // Command: Copy Generated Content to Clipboard (takes optional SessionItem from context menu)
+    // Command: Copy Generated Content to Clipboard
     register('fileintegrator.copyToClipboard', async (item?: SessionItem) => {
         const s = item?.session ?? await selectSession('Select session to copy content from');
         if (!s) return;
-
         if (s.storage.resourcesOnly.length === 0) {
             vscode.window.showInformationMessage(`Session "${s.name}" contains no file/resource content to copy.`);
             return;
         }
-
         let contentToCopy: string;
-        // Prefer content directly from the associated document if it's open
         if (s.associatedDocument && !s.associatedDocument.isClosed) {
             contentToCopy = s.associatedDocument.getText();
         } else {
-            // Otherwise, generate the content on the fly
             contentToCopy = await generateMarkdownContent(s);
         }
-
-        // Check if content was actually generated/retrieved before copying
         if (contentToCopy && !contentToCopy.startsWith('<!-- No file/resource content')) {
             await vscode.env.clipboard.writeText(contentToCopy);
-            vscode.window.showInformationMessage(`Session "${s.name}" content copied to clipboard!`);
+            vscode.window.showInformationMessage(`Session "${s.name}" Code Block content copied to clipboard!`);
         } else {
-            vscode.window.showWarningMessage("No content was generated or found to copy.");
+            vscode.window.showWarningMessage("No code block content was generated or found to copy.");
         }
     });
 
-    // Command: Remove Single Item (triggered only from ResourceItem context menu)
+    // Command: Remove Single Item
     register('fileintegrator.removeItem', async (item: ResourceItem) => {
-        // Guard against incorrect context
         if (!item || !(item instanceof ResourceItem)) return;
         const s = sessionManager.getSession(item.sessionId);
         if (s) {
-            // removeEntry handles recursive removal of children
             if (s.storage.removeEntry(item.uriString)) {
                 sessionManager.persistSessions();
-                await updateCodeBlockDocument(s); // Update associated doc
+                await updateCodeBlockDocument(s);
                 fileIntegratorProvider.refresh();
             } else {
-                fileIntegratorProvider.refresh(); // Refresh even if removal failed (shouldn't normally)
+                fileIntegratorProvider.refresh();
             }
         }
     });
@@ -932,26 +957,104 @@ function registerCommands(context: vscode.ExtensionContext) {
         fileIntegratorProvider.refresh();
     });
 
-    // Command: Add Active Editor to Session (takes optional SessionItem from context menu)
+    // Command: Add Active Editor to Session
     register('fileintegrator.addActiveEditorToSession', async (item?: SessionItem) => {
         const targetSession = item?.session ?? await selectSession("Select session to add active editor to");
         if (!targetSession) return;
         await addActiveEditorLogic(targetSession);
     });
 
-    // Command: Add All Open Editors to Session (triggered only from SessionItem context menu)
+    // Command: Add All Open Editors to Session
     register('fileintegrator.addAllOpenEditorsToSession', async (item?: SessionItem) => {
-        // This command is now triggered via context menu, so 'item' should be the SessionItem
-        if (!item || !(item instanceof SessionItem)) {
-             // If somehow triggered without context, fallback or error
-             const session = await selectSession("Select session to add all open editors to");
-             if (!session) return;
-             await addAllOpenEditorsLogic(session); // Call helper with selected session
-             return;
-         }
-        await addAllOpenEditorsLogic(item.session); // Call helper with the session from context
+        const session = item?.session ?? await selectSession("Select session to add all open editors to");
+        if (!session) return;
+        await addAllOpenEditorsLogic(session);
+    });
+
+
+    // --- NEW GIT COMMANDS ---
+
+    // Command: Generate Diff Document (vs HEAD)
+    register('fileintegrator.generateDiffDocument', async (item?: SessionItem) => {
+        const s = item?.session ?? await selectSession('Select session to generate Git diff for');
+        if (!s) return;
+
+        if (!gitAPI) {
+            vscode.window.showErrorMessage("Git integration is not available. Ensure the built-in Git extension is enabled.");
+            return;
+        }
+
+        try {
+            // Pass showMessage function for feedback within calculateSessionDiff
+            const { diffOutput, skippedFiles, diffedFilesCount } = await calculateSessionDiff(s, (msg) => vscode.window.showInformationMessage(msg));
+
+            let infoMsg = '';
+            if (skippedFiles.length > 0) {
+                infoMsg = ` (Skipped ${skippedFiles.length} non-Git or non-file item(s))`;
+            }
+
+            if (diffedFilesCount === 0) {
+                 // Message shown by calculateSessionDiff if needed
+                 return;
+            }
+
+            if (!diffOutput || diffOutput.trim() === '') {
+                vscode.window.showInformationMessage(`No changes found compared to HEAD for items in session "${s.name}".${infoMsg}`);
+                return;
+            }
+
+            const doc = await vscode.workspace.openTextDocument({ content: diffOutput, language: 'diff' });
+            await vscode.window.showTextDocument(doc, { preview: false });
+
+             if (skippedFiles.length > 0 && diffOutput && diffOutput.trim() !== '') {
+                 vscode.window.showInformationMessage(`Generated diff (vs HEAD).${infoMsg}`);
+             }
+
+        } catch (error: any) {
+            console.error(`[GenerateDiff] Error:`, error);
+            vscode.window.showErrorMessage(`Failed to generate diff: ${error.message}`);
+        }
+    });
+
+    // Command: Copy Diff to Clipboard (vs HEAD)
+    register('fileintegrator.copyDiffToClipboard', async (item?: SessionItem) => {
+        const s = item?.session ?? await selectSession('Select session to copy Git diff from');
+        if (!s) return;
+
+        if (!gitAPI) {
+            vscode.window.showErrorMessage("Git integration is not available. Ensure the built-in Git extension is enabled.");
+            return;
+        }
+
+         try {
+            // Pass showMessage function for feedback within calculateSessionDiff
+            const { diffOutput, skippedFiles, diffedFilesCount } = await calculateSessionDiff(s, (msg) => vscode.window.showInformationMessage(msg));
+
+            let infoMsg = '';
+            if (skippedFiles.length > 0) {
+                infoMsg = ` (Skipped ${skippedFiles.length} non-Git or non-file item(s))`;
+            }
+
+            if (diffedFilesCount === 0) {
+                // Message shown by calculateSessionDiff if needed
+                return;
+           }
+
+            if (!diffOutput || diffOutput.trim() === '') {
+                vscode.window.showInformationMessage(`No changes found compared to HEAD for items in session "${s.name}".${infoMsg}`);
+                return;
+            }
+
+            await vscode.env.clipboard.writeText(diffOutput);
+            vscode.window.showInformationMessage(`Diff (vs HEAD) for session "${s.name}" copied to clipboard.${infoMsg}`);
+
+        } catch (error: any) {
+            console.error(`[CopyDiff] Error:`, error);
+            vscode.window.showErrorMessage(`Failed to copy diff: ${error.message}`);
+        }
     });
 }
+
 
 // --- Command Logic Helpers ---
 
@@ -991,8 +1094,7 @@ async function addActiveEditorLogic(targetSession: Session) {
     if (targetSession.storage.addItem(newEntry)) {
         sessionManager.persistSessions();
         await updateCodeBlockDocument(targetSession);
-        // Refresh the specific session node if possible, otherwise full refresh
-        fileIntegratorProvider.refresh(); // Full refresh is simpler for now
+        fileIntegratorProvider.refresh();
     } else {
         vscode.window.showWarningMessage(`Failed to add "${getDisplayUri(uriString)}" (perhaps already added?).`);
     }
@@ -1006,7 +1108,6 @@ async function addAllOpenEditorsLogic(targetSession: Session) {
     // Collect unique URIs from all open tabs, excluding the target session's doc
     for (const tabGroup of vscode.window.tabGroups.all) {
         for (const tab of tabGroup.tabs) {
-            // The tab.input object structure varies, try to get 'uri'
             const uri = (tab.input as any)?.uri;
             if (uri instanceof vscode.Uri) {
                 const uriString = uri.toString();
@@ -1048,7 +1149,7 @@ async function addAllOpenEditorsLogic(targetSession: Session) {
     if (addedCount > 0) {
         sessionManager.persistSessions();
         await updateCodeBlockDocument(targetSession);
-        fileIntegratorProvider.refresh(); // Refresh the view
+        fileIntegratorProvider.refresh();
         let message = `Added ${addedCount} unique open editor(s) to session "${targetSession.name}".`;
         if (skippedCount > 0) {
             message += ` Skipped ${skippedCount} item(s) (already present or session doc).`;
@@ -1065,8 +1166,7 @@ async function addAllOpenEditorsLogic(targetSession: Session) {
 
 export function deactivate() {
     console.log('Deactivating File Integrator...');
-    // Dispose SessionManager (which disposes individual sessions) if needed,
-    // but subscriptions handle this automatically via context.subscriptions.push({ dispose: ... })
+    gitAPI = undefined; // Clear API reference
 }
 
 // --- Utility Functions ---
@@ -1077,20 +1177,16 @@ function isPathExcluded(filePath: string): boolean {
     const excludePatterns = config.get<Record<string, boolean>>('exclude');
     if (!excludePatterns) return false;
 
-    // Normalize path separators for consistent matching
     const normalizedFilePath = filePath.replace(/\\/g, '/');
     const workspaceFolders = vscode.workspace.workspaceFolders;
 
     for (const pattern in excludePatterns) {
-        if (excludePatterns[pattern]) { // Only check patterns set to true
+        if (excludePatterns[pattern]) {
             const normalizedPattern = pattern.replace(/\\/g, '/');
-            // Options for minimatch: dot allows matching hidden files, nocase for Windows
             const options = { dot: true, nocase: process.platform === 'win32' };
 
-            // Direct match against the full normalized path
             if (minimatch(normalizedFilePath, normalizedPattern, options)) return true;
 
-            // Check relative path within workspace folders
             if (workspaceFolders) {
                 for (const folder of workspaceFolders) {
                     const folderPath = folder.uri.fsPath.replace(/\\/g, '/');
@@ -1100,13 +1196,12 @@ function isPathExcluded(filePath: string): boolean {
                     }
                 }
             }
-            // Check basename match if pattern doesn't contain a separator (e.g., "node_modules")
             if (!normalizedPattern.includes('/')) {
                 if (minimatch(path.basename(normalizedFilePath), normalizedPattern, options )) return true;
             }
         }
     }
-    return false; // Not excluded by any pattern
+    return false;
  }
 
 /** Prompts user to select a session via Quick Pick. Returns undefined if cancelled. */
@@ -1116,13 +1211,11 @@ function isPathExcluded(filePath: string): boolean {
         vscode.window.showErrorMessage("No sessions available.");
         return undefined;
     }
-    // If only one session exists, return it directly
     if (sessions.length === 1) return sessions[0];
 
-    // Map sessions to QuickPick items
     const picks = sessions.map(s => ({ label: s.name, description: `(${s.storage.files.length} items)`, session: s }));
     const selection = await vscode.window.showQuickPick(picks, { placeHolder, canPickMany: false });
-    return selection?.session; // Return the session object from the selected pick
+    return selection?.session;
  }
 
 /**
@@ -1131,7 +1224,6 @@ function isPathExcluded(filePath: string): boolean {
  */
  async function generateMarkdownContent(session: Session): Promise<string> {
     let content = '';
-    // Get only non-directory entries in their current order
     const resourceEntries = session.storage.files.filter(f => !f.isDirectory);
 
     if (resourceEntries.length === 0) {
@@ -1143,44 +1235,40 @@ function isPathExcluded(filePath: string): boolean {
     for (const entry of resourceEntries) {
         let resourceContent: string | null = entry.content;
 
-        // Load content via VS Code API if it wasn't read initially or loaded from persistence
         if (resourceContent === null) {
             const uri = vscode.Uri.parse(entry.uriString);
             try {
                 console.log(`[MarkdownGen] Reading content for URI: ${entry.uriString}`);
-                // openTextDocument works for various schemes (file:, untitled:, jar:, etc.)
                 const doc = await vscode.workspace.openTextDocument(uri);
                 resourceContent = doc.getText();
-                // Consider caching content back to entry.content? Might increase memory usage.
+                // Optionally cache content back to entry.content if memory is not a concern
                 // entry.content = resourceContent;
             } catch (error: any) {
                 console.error(`[MarkdownGen] Error reading URI ${entry.uriString}:`, error);
                 const displayUri = getDisplayUri(entry.uriString);
-                // Provide specific error messages for common cases
-                 if (error?.code === 'FileNotFound' || error?.code === 'EntryNotFound') {
-                     resourceContent = `--- Error: Resource not found (${displayUri}) ---`;
-                     vscode.window.showWarningMessage(`Resource not found: ${displayUri}`);
+                 if (error?.code === 'FileNotFound' || error?.code === 'EntryNotFound' || error?.message?.includes('cannot open')) {
+                     resourceContent = `--- Error: Resource not found or inaccessible (${displayUri}) ---`;
+                     // Only show warning once per generation perhaps? Or rely on console.
+                     // vscode.window.showWarningMessage(`Resource not found or inaccessible: ${displayUri}`);
                  } else {
                      resourceContent = `--- Error reading content for ${displayUri}: ${error.message} ---`;
-                     vscode.window.showWarningMessage(`Could not read content for: ${displayUri}`);
+                     // vscode.window.showWarningMessage(`Could not read content for: ${displayUri}`);
                  }
             }
         }
 
-        // Get display URI for the header and determine language for code block
         const displayUri = getDisplayUri(entry.uriString, 'markdownHeader');
         const uriPath = vscode.Uri.parse(entry.uriString).path;
-        // Extract part after the last '!/' for archives, otherwise use full path
         const langPart = uriPath.includes('!/') ? uriPath.substring(uriPath.lastIndexOf('!/') + 1) : uriPath;
         const ext = path.extname(langPart);
-        const lang = ext ? ext.substring(1) : ''; // Get extension without dot
+        const lang = ext ? ext.substring(1) : '';
 
         content += `${displayUri}\n\`\`\`${lang}\n`;
-        content += resourceContent ?? `--- Content Unavailable ---`; // Fallback message
+        content += resourceContent ?? `--- Content Unavailable ---`;
         content += `\n\`\`\`\n\n`;
     }
 
-    return content.trimEnd(); // Remove trailing whitespace
+    return content.trimEnd();
 }
 
 /**
@@ -1191,12 +1279,10 @@ function isPathExcluded(filePath: string): boolean {
 async function showCodeBlockDocument(session: Session): Promise<vscode.TextDocument | undefined> {
     const content = await generateMarkdownContent(session);
 
-    // If associated document exists and is open, update it in place
     if (session.associatedDocument && !session.associatedDocument.isClosed) {
         const doc = session.associatedDocument;
         try {
             const edit = new vscode.WorkspaceEdit();
-            // Replace the entire document content
             edit.replace(doc.uri, new vscode.Range(0, 0, doc.lineCount, 0), content);
             const success = await vscode.workspace.applyEdit(edit);
             if (!success) throw new Error("ApplyEdit failed");
@@ -1204,13 +1290,10 @@ async function showCodeBlockDocument(session: Session): Promise<vscode.TextDocum
             return doc;
         } catch (e) {
             console.error(`[ShowDoc] Error updating associated doc ${doc.uri}:`, e);
-            // If update fails, detach the old link and attempt to create a new doc as fallback
-            await session.closeAssociatedDocument(false); // Detach only
+            await session.closeAssociatedDocument(false);
             return createNewAssociatedDocument(session, content);
         }
     }
-
-    // If no associated document, create a new one
      return createNewAssociatedDocument(session, content);
 }
 
@@ -1218,21 +1301,19 @@ async function showCodeBlockDocument(session: Session): Promise<vscode.TextDocum
 async function createNewAssociatedDocument(session: Session, content: string): Promise<vscode.TextDocument | undefined> {
     try {
         console.log(`[ShowDoc] Creating new associated document for session ${session.id}`);
-        // Open an untitled document with the generated content and Markdown language mode
         const doc = await vscode.workspace.openTextDocument({ content: content, language: 'markdown' });
-        session.setAssociatedDocument(doc); // Link the session to the new document
+        session.setAssociatedDocument(doc);
         return doc;
     } catch (e: any) {
         console.error(`[ShowDoc] Failed to create associated document:`, e);
         vscode.window.showErrorMessage(`Failed to create associated document: ${e.message}`);
-        session.closeAssociatedDocument(false); // Ensure link is cleared on failure
+        session.closeAssociatedDocument(false);
         return undefined;
     }
 }
 
 /** Updates the associated document content *if* it exists and is open, without showing it. */
 async function updateCodeBlockDocument(session: Session): Promise<void> {
-    // Only proceed if the document link exists and the document hasn't been closed by the user
     if (session.associatedDocument && !session.associatedDocument.isClosed) {
         const doc = session.associatedDocument;
         console.log(`[UpdateDoc] Updating associated document for session ${session.id}`);
@@ -1243,13 +1324,13 @@ async function updateCodeBlockDocument(session: Session): Promise<void> {
             const success = await vscode.workspace.applyEdit(edit);
             if (!success) {
                 console.warn(`[UpdateDoc] ApplyEdit failed for ${doc.uri}. Detaching association.`);
-                session.closeAssociatedDocument(false); // Detach link if update fails
+                session.closeAssociatedDocument(false);
             } else {
                  console.log(`[UpdateDoc] Successfully updated associated document.`);
              }
         } catch (err) {
             console.error(`[UpdateDoc] Error applying edit to ${doc.uri}:`, err);
-            session.closeAssociatedDocument(false); // Detach link on error
+            session.closeAssociatedDocument(false);
             vscode.window.showErrorMessage("Error updating associated code block document.");
         }
     }
@@ -1263,73 +1344,65 @@ function getDisplayUri(uriString: string, type: 'treeDescription' | 'markdownHea
      try {
         const uri = vscode.Uri.parse(uriString);
         const scheme = uri.scheme;
-        const uriPath = uri.path;
+        const uriPath = uri.path; // Use path for consistency, fsPath is only for 'file' scheme
 
-        // --- Handle Archive URIs (jar:, or file:...!) ---
-        const bangIndex = uriPath.lastIndexOf('!/'); // Find the last separator
+        // Handle Archive URIs (jar:, or file:...!)
+        const bangIndex = uri.toString().lastIndexOf('!/');
         if ((scheme === 'jar' || scheme === 'file') && bangIndex !== -1) {
-            let archivePart = '';
-            let internalPath = uriPath.substring(bangIndex + 1); // Path inside archive
+            const fullUriStr = uri.toString();
+            let archivePart = fullUriStr.substring(0, bangIndex);
+            let internalPath = fullUriStr.substring(bangIndex + 1);
             let archiveName = 'archive';
+            let archiveScheme = scheme;
 
-            if (scheme === 'jar') {
-                // jar:file:/path/to/archive.jar!/internal/path
-                archivePart = uriPath.substring(0, bangIndex); // Includes scheme etc.
-                try {
-                    archiveName = path.basename(vscode.Uri.parse(archivePart).path);
-                } catch { /* Use default */ }
-            } else { // scheme === 'file'
-                // file:/path/to/archive.zip!/internal/path
-                // fsPath might be more reliable for the outer file path
-                archivePart = uri.fsPath;
-                const fsBangIndex = archivePart.lastIndexOf('!');
-                archiveName = path.basename(fsBangIndex !== -1 ? archivePart.substring(0, fsBangIndex) : archivePart);
-            }
+             try {
+                 const archiveUri = vscode.Uri.parse(archivePart);
+                 archiveName = path.basename(archiveUri.fsPath || archiveUri.path);
+                 archiveScheme = archiveUri.scheme;
+             } catch {
+                 archiveName = path.basename(archivePart);
+             }
 
-            // Clean internal path and format output
             const displayInternalPath = (internalPath.startsWith('/') ? internalPath.substring(1) : internalPath).replace(/\\/g, '/');
             const fullDisplay = `${archiveName}!/${displayInternalPath}`;
 
             if (type === 'treeDescription') {
-                // Shorten both parts for tree view label
                 const shortArchive = archiveName.length > 15 ? archiveName.substring(0, 6) + '...' + archiveName.slice(-6) : archiveName;
                 const shortInternal = displayInternalPath.length > 20 ? '.../' + displayInternalPath.slice(-17) : displayInternalPath;
-                return `${shortArchive}!/${shortInternal}`; // No parentheses for label
-            } else {
-                return fullDisplay; // Longer version for tooltip/header
+                const prefix = archiveScheme !== 'file' ? `${archiveScheme}:` : '';
+                return `${prefix}${shortArchive}!/${shortInternal}`;
+            } else if (type === 'tooltip') {
+                 const prefix = archiveScheme !== 'file' ? `${archiveScheme}:` : '';
+                 return `${prefix}${fullDisplay}`;
+            } else { // markdownHeader
+                 return fullDisplay; // Use full name for header for clarity
             }
         }
-        // --- Handle Standard File URIs ---
+        // Handle Standard File URIs
         else if (scheme === 'file') {
-             // Use helper to get potentially relative path
              return getDisplayPath(uri.fsPath, type === 'treeDescription');
         }
-        // --- Handle Other Schemes (untitled, git, http, etc.) ---
+        // Handle Other Schemes
         else {
-            let displayPath = uri.fsPath || uri.path; // Prefer fsPath if available
-            // Basic path cleanup
+            let displayPath = uri.fsPath || uri.path;
              if (uri.authority && displayPath.startsWith('/' + uri.authority)) {
                  displayPath = displayPath.substring(uri.authority.length + 1);
              }
              if (displayPath.startsWith('/')) displayPath = displayPath.substring(1);
 
-             // Format like scheme:<authority>//<path>
-             const authority = uri.authority ? `//${uri.authority}/` : (uri.scheme === 'untitled' ? '' : '//');
-             const fullDisplay = `${scheme}:${authority}${displayPath}`;
+             const authority = uri.authority ? `//${uri.authority}/` : (uri.scheme === 'untitled' ? '' : ':');
+             const fullDisplay = `${scheme}${authority}${displayPath}`;
 
              if (type === 'treeDescription') {
-                 // Shorten reasonably for tree label
                  const maxLength = 45;
                  if (fullDisplay.length > maxLength) {
                     return fullDisplay.substring(0, scheme.length + 1) + '...' + fullDisplay.substring(fullDisplay.length - (maxLength - scheme.length - 4));
                  }
              }
-             // Return full display for tooltips/headers or if short enough
              return fullDisplay;
         }
     } catch (e) {
         console.warn(`[getDisplayUri] Error parsing/formatting URI string: ${uriString}`, e);
-        // Fallback for unparseable strings
         if (type === 'treeDescription' && uriString.length > 40) {
              return uriString.substring(0, 15) + '...' + uriString.substring(uriString.length - 22);
         }
@@ -1342,55 +1415,253 @@ function getDisplayPath(filePath: string, short: boolean = false): string {
     const workspaceFolders = vscode.workspace.workspaceFolders;
     let relativePath: string | undefined;
 
-    // Try to find the workspace folder containing the file path
     if (workspaceFolders) {
-        // Sort folders by length descending to match deepest containing folder first
         const sortedFolders = [...workspaceFolders].sort((a, b) => b.uri.fsPath.length - a.uri.fsPath.length);
         for (const folder of sortedFolders) {
             const folderPath = folder.uri.fsPath;
-            // Use path.relative which handles path separators and case sensitivity correctly
             const rel = path.relative(folderPath, filePath);
 
-            // If path.relative doesn't start with '..', it's inside the folder or is the folder itself
             if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
                 relativePath = rel;
-                // If the path *is* the workspace folder path, rel will be empty. Use basename.
                  if (relativePath === '') {
                       relativePath = path.basename(folderPath);
                  }
-                 // Add workspace folder name prefix only if 'short' (treeDescription) is requested
-                 // and there are multiple roots, to disambiguate.
                  else if (workspaceFolders.length > 1 && short) {
-                     relativePath = `${path.basename(folderPath)}/${relativePath}`;
+                     relativePath = `${path.basename(folderPath)}/${relativePath.replace(/\\/g, '/')}`;
                  }
-                break; // Found the containing folder
+                break;
             }
         }
     }
 
-    // Use relative path if found
     if (relativePath) {
-        const display = relativePath.replace(/\\/g, '/'); // Use forward slashes
+        const display = relativePath.replace(/\\/g, '/');
         if (short && display.length > 40) {
              const parts = display.split('/');
              if (parts.length > 2) {
-                 // Show first part (folder?) / ... / last part (file)
                  return parts[0] + '/.../' + parts[parts.length-1];
+             } else {
+                 return display;
              }
         }
         return display;
     } else {
-        // Fallback: Show shortened absolute path for non-workspace files
-        const pathParts = filePath.split(/[\\/]/).filter(Boolean);
+        const pathParts = filePath.split(path.sep).filter(Boolean);
         const partsCount = pathParts.length;
+        const sep = path.sep;
+
         if (short && partsCount > 3) {
-            return '...' + path.sep + pathParts.slice(-2).join(path.sep); // ".../dir/file"
+            return `...${sep}${pathParts.slice(-2).join(sep)}`;
         } else if (!short && partsCount > 4) {
-             return '...' + path.sep + pathParts.slice(-3).join(path.sep); // ".../dir1/dir2/file"
-         } else if (partsCount > 0){
-             return filePath; // Return full absolute path if short
+             return `...${sep}${pathParts.slice(-3).join(sep)}`;
          } else {
-             return filePath; // Should not happen for valid paths
+             return filePath;
          }
     }
+}
+
+
+// --- Git Diff Helper Function ---
+/**
+ * Calculates the scoped Git diff (changes vs HEAD) for file items in a session.
+ * @param showInfoMessage Optional callback to display intermediate messages to the user.
+ */
+async function calculateSessionDiff(
+    session: Session,
+    showInfoMessage?: (message: string) => void
+): Promise<{ diffOutput: string; skippedFiles: string[]; diffedFilesCount: number }> {
+    if (!gitAPI) {
+        throw new Error("Git API is not available.");
+    }
+
+    const filesToDiff = new Map<string, { repo: GitRepository, paths: string[] }>(); // Map repo root URI string to repo object and RELATIVE paths
+    const skippedFiles: string[] = [];
+    let diffedFilesCount = 0;
+
+    // 1. Filter and Group files by repository
+    console.log(`[DiffCalc] Processing ${session.storage.files.length} items for session ${session.id}`);
+    for (const entry of session.storage.files) {
+        let uri: vscode.Uri;
+        try {
+            uri = vscode.Uri.parse(entry.uriString, true); // Strict parsing
+        } catch (e) {
+            console.warn(`[DiffCalc] Skipping invalid URI: ${entry.uriString}`, e);
+            skippedFiles.push(entry.uriString);
+            continue;
+        }
+
+        if (uri.scheme !== 'file') {
+            skippedFiles.push(entry.uriString);
+            console.log(`[DiffCalc] Skipping non-file URI: ${entry.uriString}`);
+            continue;
+        }
+
+        const repo = gitAPI.getRepository(uri);
+        if (!repo) {
+            skippedFiles.push(entry.uriString);
+            console.log(`[DiffCalc] Skipping file outside Git repo: ${uri.fsPath}`);
+            continue;
+        }
+
+        diffedFilesCount++;
+        const repoRootStr = repo.rootUri.toString();
+        if (!filesToDiff.has(repoRootStr)) {
+            filesToDiff.set(repoRootStr, { repo, paths: [] });
+        }
+
+        // Get the relative path for the diff command within that repo context
+        const relativePath = path.relative(repo.rootUri.fsPath, uri.fsPath).replace(/\\/g, '/');
+
+        if (relativePath && relativePath !== '.') {
+            const existingPaths = filesToDiff.get(repoRootStr)!.paths;
+            // Check if path is already covered by a parent directory or '.'
+            const isAlreadyCovered = existingPaths.some(p => p === '.' || relativePath.startsWith(p + '/'));
+            // Check if path itself is already added
+            const isAlreadyAdded = existingPaths.includes(relativePath);
+
+            if (!isAlreadyCovered && !isAlreadyAdded) {
+                 // If adding a directory, remove any files *within* it already added
+                if (entry.isDirectory) {
+                     filesToDiff.get(repoRootStr)!.paths = existingPaths.filter(p => !p.startsWith(relativePath + '/'));
+                     console.log(`[DiffCalc] Adding directory path for repo ${repoRootStr}: ${relativePath}`);
+                 } else {
+                     console.log(`[DiffCalc] Adding file path for repo ${repoRootStr}: ${relativePath}`);
+                 }
+                 filesToDiff.get(repoRootStr)!.paths.push(relativePath);
+            } else {
+                 console.log(`[DiffCalc] Path ${relativePath} already covered or added in repo ${repoRootStr}`);
+            }
+
+        } else if (entry.isDirectory && (relativePath === '.' || relativePath === '')) {
+           // If the entry IS the repo root directory, add '.' (covers all)
+           const existingPaths = filesToDiff.get(repoRootStr)!.paths;
+            if (!existingPaths.includes('.')) {
+                filesToDiff.get(repoRootStr)!.paths = ['.']; // Replace specific paths with '.'
+                console.log(`[DiffCalc] Adding '.' for repo root ${repoRootStr} (covers all)`);
+            } else {
+                console.log(`[DiffCalc] Repo root '.' already added for ${repoRootStr}`);
+            }
+        }
+         else if (!entry.isDirectory && (relativePath === '' || relativePath === '.')) {
+             // This case (a file mapping to the repo root) shouldn't happen with valid Git repos.
+             console.warn(`[DiffCalc] Calculated empty/root relative path for file: ${uri.fsPath} in repo ${repo.rootUri.fsPath}`);
+             skippedFiles.push(entry.uriString);
+         }
+    }
+
+    if (diffedFilesCount === 0 && showInfoMessage) {
+        let msg = `No Git-tracked file items found in session "${session.name}".`;
+         if(skippedFiles.length > 0) {
+            msg += ` (Skipped ${skippedFiles.length} non-Git or non-file item(s))`;
+         }
+        showInfoMessage(msg);
+    }
+
+    // 2. Execute git diff for each repository path
+    let combinedDiff = '';
+    await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `Calculating Git diff (vs HEAD) for session "${session.name}"...`,
+        cancellable: false // Keep it simple, no cancellation for now
+    }, async (progress) => {
+        let repoIndex = 0;
+        const totalRepos = filesToDiff.size;
+
+        for (const [repoRoot, data] of filesToDiff.entries()) {
+            repoIndex++;
+            const repoDisplayName = path.basename(data.repo.rootUri.fsPath);
+            progress.report({ message: `Processing repo ${repoIndex}/${totalRepos}: ${repoDisplayName}`, increment: (1 / totalRepos) * 100 });
+
+            // Filter out empty paths just in case
+            const pathsToProcess = data.paths.filter(p => p.length > 0);
+            if (pathsToProcess.length === 0) {
+                console.log(`[DiffCalc] No specific paths to diff in repo ${repoDisplayName}.`);
+                continue;
+            }
+
+            // If '.' is the only path, we diff the entire repo against HEAD
+            if (pathsToProcess.length === 1 && pathsToProcess[0] === '.') {
+                 try {
+                     console.log(`[DiffCalc] Diffing repo root '.' against HEAD for ${repoDisplayName}`);
+                     // Request diff against HEAD for the whole repository
+                     const repoRootDiff = await data.repo.diffWithHEAD(); // Returns Change[]
+
+                     // We need the raw diff text. The API doesn't directly give `git diff HEAD -- .`
+                     // Let's try `git diff HEAD` via show - less ideal but might work
+                     // This is a limitation; ideally, we'd use exec if available.
+                     // For now, indicate this limitation or skip.
+                     // Let's try diffing HEAD vs working tree for files instead?
+                     // Option: Get structured changes vs HEAD and format them (complex)
+                     // Option: Show message about limitation
+                     // Option: Fallback to diffing individual files known to the repo (might be huge)
+
+                     // Workaround: Let's try `show` on HEAD which sometimes includes a diff? No, not reliable.
+                     // Workaround 2: Diff with empty tree (initial commit)? No, that's not HEAD.
+                     // Workaround 3: Use available API. Call diffWithHEAD for *all files* in the repo? Inefficient.
+
+                     // Best current approach with THIS API: Iterate individual files if '.' is present.
+                     // Get all tracked files in the repo? API doesn't expose ls-files easily.
+
+                     // Simplest approach for now: If '.' is present, skip detailed diffing for this repo and note it.
+                     console.warn(`[DiffCalc] Diffing entire repo root ('.') against HEAD is not directly supported by the currently used API methods. Skipping detailed diff for ${repoDisplayName}.`);
+                     combinedDiff += `--- Diff for repository root: ${repoDisplayName} (Specific file diffs not generated due to API limitations) ---\n\n`;
+                     continue; // Skip to the next repo
+
+                 } catch (error: any) {
+                    console.error(`[DiffCalc] Error during repo root diff attempt for ${repoDisplayName}:`, error);
+                     // Append error details to the combined diff
+                    if (filesToDiff.size > 1) {
+                        combinedDiff += `--- Error diffing repository root: ${repoDisplayName} ---\n`;
+                    }
+                    combinedDiff += `Error: ${error.message || 'Unknown Git error'}\n\n`;
+                 }
+                 continue; // Skip the path iteration below
+            }
+
+            // Diff each path individually using diffWithHEAD
+            let repoDiff = '';
+            console.log(`[DiffCalc] Diffing individual paths against HEAD for repo ${repoDisplayName}:`, pathsToProcess);
+            for (const relativePath of pathsToProcess) {
+                try {
+                    // diffWithHEAD(path) diffs working tree vs HEAD for that path
+                    const pathDiff = await data.repo.diffWithHEAD(relativePath);
+                    if (pathDiff && pathDiff.trim() !== '') {
+                        // Add a header for the specific file within the repo's section
+                        // Use standard diff header format
+                        repoDiff += `diff --git a/${relativePath} b/${relativePath}\n`;
+                        // Note: We don't get index hashes or modes easily here.
+                        // Append the diff content directly
+                        repoDiff += `${pathDiff}\n\n`; // Add extra newline for spacing
+                        console.log(`[DiffCalc] Found diff for path ${relativePath} in repo ${repoDisplayName}`);
+                    }
+                } catch (error: any) {
+                    console.error(`[DiffCalc] Error running git diff for path ${relativePath} in repo ${repoDisplayName}:`, error);
+                    // Include error details in the output for debugging
+                    repoDiff += `--- Error diffing path: ${relativePath} ---\n`;
+                    repoDiff += `Error: ${error.message || 'Unknown Git error'}\n`;
+                    if (error.stderr) { // If error object has stderr (from potential exec behind the scenes)
+                        repoDiff += `Stderr:\n${error.stderr}\n`;
+                    }
+                    if (error.gitErrorCode) { // If error object has gitErrorCode
+                        repoDiff += `GitErrorCode: ${error.gitErrorCode}\n`;
+                    }
+                    repoDiff += `\n\n`;
+                }
+            }
+
+            if (repoDiff.trim() !== '') {
+                 if (filesToDiff.size > 1) {
+                     // Add repo header only if there was actual diff content for this repo
+                     combinedDiff += `--- Diff for repository: ${repoDisplayName} ---\n\n`;
+                 }
+                 combinedDiff += repoDiff; // Append the accumulated diff for this repo
+             } else {
+                 console.log(`[DiffCalc] No diff output for repo ${repoDisplayName} after checking paths.`);
+             }
+        }
+    });
+
+    console.log(`[DiffCalc] Finished. Diff length: ${combinedDiff.length}, Skipped: ${skippedFiles.length}, Diffed Files Count: ${diffedFilesCount}`);
+    // Return trimmed diff, skipped files list, and the count of files considered for diffing
+    return { diffOutput: combinedDiff.trim(), skippedFiles, diffedFilesCount };
 }

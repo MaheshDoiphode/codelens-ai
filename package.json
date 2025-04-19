@@ -1,10 +1,14 @@
 {
   "name": "fileintegrator",
   "displayName": "File Integrator",
-  "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence.",
-  "version": "0.0.8",
+  "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence. Includes Git diff capabilities.",
+  "version": "0.0.9",
   "engines": {
     "vscode": "^1.97.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MaheshDoiphode/vscode-file-integrator.git"
   },
   "categories": [
     "Other"
@@ -115,6 +119,16 @@
         "command": "fileintegrator.addAllOpenEditorsToSession",
         "title": "Add All Open Editors to Session",
         "icon": "$(window)"
+      },
+      {
+        "command": "fileintegrator.generateDiffDocument",
+        "title": "Generate Diff Document (vs HEAD)",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "fileintegrator.copyDiffToClipboard",
+        "title": "Copy Diff to Clipboard (vs HEAD)",
+        "icon": "$(clippy)"
       }
     ],
     "viewsContainers": {
@@ -140,7 +154,8 @@
           "command": "fileintegrator.addSession",
           "when": "view == fileIntegratorView",
           "group": "navigation@1"
-        },        {
+        },
+        {
           "command": "fileintegrator.refreshView",
           "when": "view == fileIntegratorView",
           "group": "navigation@2"
@@ -173,14 +188,24 @@
           "group": "inline@3"
         },
         {
+            "command": "fileintegrator.generateDiffDocument",
+            "when": "view == fileIntegratorView && viewItem == session",
+            "group": "2_diff@1"
+        },
+        {
+            "command": "fileintegrator.copyDiffToClipboard",
+            "when": "view == fileIntegratorView && viewItem == session",
+            "group": "2_diff@2"
+        },
+        {
           "command": "fileintegrator.renameSession",
           "when": "view == fileIntegratorView && viewItem == session",
-          "group": "1_modification@1"
+          "group": "3_modification@1"
         },
         {
           "command": "fileintegrator.removeSession",
           "when": "view == fileIntegratorView && viewItem == session",
-          "group": "1_modification@2"
+          "group": "3_modification@2"
         },
         {
           "command": "fileintegrator.removeItem",
@@ -203,5 +228,8 @@
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src",
     "test": "vscode-test"
-  }
+  },
+  "extensionDependencies": [
+    "vscode.git"
+  ]
 }
