@@ -1,7 +1,7 @@
 {
   "name": "fileintegrator",
   "displayName": "File Integrator",
-  "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence. Includes Git diff capabilities.",
+  "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence. Includes Git diff capabilities and directory structure copying.",
   "version": "0.0.9",
   "engines": {
     "vscode": "^1.97.0"
@@ -42,7 +42,7 @@
       "properties": {
         "fileintegrator.exclude": {
           "type": "object",
-          "description": "Configure glob patterns for files and folders (based on file system paths) that File Integrator should exclude when adding items via drag and drop from the Explorer. Does not apply to items added via 'Add Active Editor'. Prepend '**/' to match files/folders anywhere in the path.",
+          "description": "CONTENT EXCLUSION (Drag & Drop): Configure glob patterns for files and folders (based on file system paths) that File Integrator should exclude when adding items via drag and drop from the Explorer. Does not apply to items added via 'Add Active Editor'. Prepend '**/' to match files/folders anywhere in the path.",
           "default": {
             "**/.git": true,
             "**/.svn": true,
@@ -64,7 +64,29 @@
           },
           "additionalProperties": {
             "type": "boolean",
-            "description": "Set to true to exclude files/folders matching the glob pattern during drag/drop."
+            "description": "Set true to exclude matching items during drag/drop."
+          }
+        },
+        "fileintegrator.excludeFromTree": {
+          "type": "object",
+          "description": "STRUCTURE EXCLUSION ('Copy Directory Structure'): Configure glob patterns for files and folders (based on relative path within the copied structure) that should be excluded from the 'Copy Directory Structure' output. Uses standard glob syntax.",
+          "default": {
+            ".git": true,
+            ".svn": true,
+            ".hg": true,
+            "CVS": true,
+            ".DS_Store": true,
+            "node_modules": true,
+            "bower_components": true,
+            "__pycache__": true,
+            "target": true,
+            "bin": true,
+            "build": true,
+            ".vscode": true
+          },
+          "additionalProperties": {
+            "type": "boolean",
+            "description": "Set true to exclude matching relative paths from the structure output."
           }
         }
       }
@@ -92,12 +114,12 @@
       },
       {
         "command": "fileintegrator.generateCodeBlock",
-        "title": "Generate Code Block",
+        "title": "Generate Code Block (Session)",
         "icon": "$(markdown)"
       },
       {
         "command": "fileintegrator.copyToClipboard",
-        "title": "Copy Code Block to Clipboard",
+        "title": "Copy Code Block (Session)",
         "icon": "$(copy)"
       },
       {
@@ -122,12 +144,12 @@
       },
       {
         "command": "fileintegrator.generateDiffDocument",
-        "title": "Generate Diff Document (Session vs HEAD)",
+        "title": "Generate Diff (Session vs HEAD)",
         "icon": "$(git-compare)"
       },
       {
         "command": "fileintegrator.copyDiffToClipboard",
-        "title": "Copy Diff to Clipboard (Session vs HEAD)",
+        "title": "Copy Diff (Session vs HEAD)",
         "icon": "$(clippy)"
       },
       {
@@ -139,6 +161,31 @@
         "command": "fileintegrator.copyDirectoryDiffToClipboard",
         "title": "Copy Diff (Directory vs HEAD)",
         "icon": "$(clippy)"
+      },
+      {
+        "command": "fileintegrator.generateFileDiffDocument",
+        "title": "Generate Diff (File vs HEAD)",
+        "icon": "$(git-compare)"
+      },
+      {
+        "command": "fileintegrator.copyFileDiffToClipboard",
+        "title": "Copy Diff (File vs HEAD)",
+        "icon": "$(clippy)"
+      },
+      {
+        "command": "fileintegrator.copyDirectoryStructure",
+        "title": "Copy Directory Structure",
+        "icon": "$(list-tree)"
+      },
+      {
+        "command": "fileintegrator.generateDirectoryCodeBlock",
+        "title": "Generate Code Block (Directory)",
+        "icon": "$(markdown)"
+      },
+      {
+        "command": "fileintegrator.copyDirectoryContentToClipboard",
+        "title": "Copy Code Block (Directory)",
+        "icon": "$(copy)"
       }
     ],
     "viewsContainers": {
@@ -208,14 +255,29 @@
           "group": "2_diff@2"
         },
         {
+          "command": "fileintegrator.copyDirectoryStructure",
+          "when": "view == fileIntegratorView && viewItem == session",
+          "group": "4_structure@1"
+        },
+        {
           "command": "fileintegrator.renameSession",
           "when": "view == fileIntegratorView && viewItem == session",
-          "group": "3_modification@1"
+          "group": "5_modification@1"
         },
         {
           "command": "fileintegrator.removeSession",
           "when": "view == fileIntegratorView && viewItem == session",
-          "group": "3_modification@2"
+          "group": "5_modification@2"
+        },
+        {
+          "command": "fileintegrator.generateDirectoryCodeBlock",
+          "when": "view == fileIntegratorView && viewItem == resourceDirectory",
+          "group": "inline@0"
+        },
+        {
+          "command": "fileintegrator.copyDirectoryContentToClipboard",
+          "when": "view == fileIntegratorView && viewItem == resourceDirectory",
+          "group": "inline@0.5"
         },
         {
           "command": "fileintegrator.generateDirectoryDiffDocument",
@@ -228,15 +290,32 @@
           "group": "inline@2"
         },
         {
+          "command": "fileintegrator.copyDirectoryStructure",
+          "when": "view == fileIntegratorView && viewItem == resourceDirectory",
+          "group": "inline@3"
+        },
+        {
           "command": "fileintegrator.removeItem",
           "when": "view == fileIntegratorView && (viewItem == resourceFile || viewItem == resourceDirectory)",
-          "group": "inline@3"
+          "group": "inline@4"
+        },
+        {
+          "command": "fileintegrator.generateFileDiffDocument",
+          "when": "view == fileIntegratorView && viewItem == resourceFile",
+          "group": "2_diff@1"
+        },
+        {
+          "command": "fileintegrator.copyFileDiffToClipboard",
+          "when": "view == fileIntegratorView && viewItem == resourceFile",
+          "group": "2_diff@2"
         },
         {
           "command": "vscode.open",
           "when": "view == fileIntegratorView && (viewItem == resourceFile || viewItem == resourceDirectory)",
           "group": "navigation",
-          "args": ["{{resourceUri}}"]
+          "args": [
+            "{{resourceUri}}"
+          ]
         }
       ]
     }
