@@ -2,7 +2,7 @@
   "name": "fileintegrator",
   "displayName": "File Integrator",
   "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence. Includes Git diff capabilities and directory structure copying.",
-  "version": "0.0.9",
+  "version": "1.0.0",
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -69,7 +69,7 @@
         },
         "fileintegrator.excludeFromTree": {
           "type": "object",
-          "description": "STRUCTURE EXCLUSION ('Copy Directory Structure'): Configure glob patterns for files and folders (based on relative path within the copied structure) that should be excluded from the 'Copy Directory Structure' output. Uses standard glob syntax.",
+          "description": "STRUCTURE EXCLUSION ('Copy Directory Structure'): Configure glob patterns for files and folders (based on relative path within the copied structure) that should be excluded from the 'Copy Directory Structure' output. Uses standard glob syntax relative to the copied root.",
           "default": {
             ".git": true,
             ".svn": true,
@@ -240,19 +240,19 @@
           "group": "inline@2"
         },
         {
-          "command": "fileintegrator.clearSession",
-          "when": "view == fileIntegratorView && viewItem == session",
-          "group": "inline@3"
-        },
-        {
           "command": "fileintegrator.generateDiffDocument",
           "when": "view == fileIntegratorView && viewItem == session",
-          "group": "2_diff@1"
+          "group": "inline@2.1"
         },
         {
           "command": "fileintegrator.copyDiffToClipboard",
           "when": "view == fileIntegratorView && viewItem == session",
-          "group": "2_diff@2"
+          "group": "inline@2.2"
+        },
+        {
+          "command": "fileintegrator.clearSession",
+          "when": "view == fileIntegratorView && viewItem == session",
+          "group": "inline@3"
         },
         {
           "command": "fileintegrator.copyDirectoryStructure",
@@ -295,19 +295,19 @@
           "group": "inline@3"
         },
         {
-          "command": "fileintegrator.removeItem",
-          "when": "view == fileIntegratorView && (viewItem == resourceFile || viewItem == resourceDirectory)",
-          "group": "inline@4"
-        },
-        {
           "command": "fileintegrator.generateFileDiffDocument",
           "when": "view == fileIntegratorView && viewItem == resourceFile",
-          "group": "2_diff@1"
+          "group": "inline@2"
         },
         {
           "command": "fileintegrator.copyFileDiffToClipboard",
           "when": "view == fileIntegratorView && viewItem == resourceFile",
-          "group": "2_diff@2"
+          "group": "inline@3"
+        },
+        {
+          "command": "fileintegrator.removeItem",
+          "when": "view == fileIntegratorView && (viewItem == resourceFile || viewItem == resourceDirectory)",
+          "group": "inline@4"
         },
         {
           "command": "vscode.open",
