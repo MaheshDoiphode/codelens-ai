@@ -39,91 +39,93 @@ const vscode = __importStar(require("vscode"));
 const path = __importStar(require("path"));
 const sessionManager_1 = require("./sessionManager");
 const treeItems_1 = require("./treeItems");
-const treeDataProvider_1 = require("./treeDataProvider");
-const utils_1 = require("./utils");
-const git_1 = require("./git");
+const treeDataProvider_1 = require("./treeDataProvider"); // Renaming class for clarity here
+const utils_1 = require("./utils"); // createNewAssociatedDocument, getDisplayPath, isPathExcluded not directly used here
+const git_1 = require("./git"); // calculateDiffForEntries not directly used here
 // --- Global Variables & Activation ---
 let sessionManager;
-let fileIntegratorProvider;
+let codeLensAiProvider;
 let treeView;
-let gitAPI; // Store the Git API instance
+let gitAPI;
+/**
+ * This method is called when your extension is activated.
+ * Your extension is activated the very first time the command is executed.
+ */
 async function activate(context) {
-    console.log('Activating File Integrator...');
-    // --- Git API Acquisition ---
+    console.log('Activating CodeLens AI...');
     try {
         const gitExtension = vscode.extensions.getExtension('vscode.git');
         if (gitExtension) {
             if (!gitExtension.isActive) {
-                console.log('Activating vscode.git extension...');
-                await gitExtension.activate(); // Ensure the Git extension is active
+                // console.log('Activating vscode.git extension for CodeLens AI...');
+                await gitExtension.activate();
             }
-            gitAPI = gitExtension.exports.getAPI(1); // Get API version 1
+            gitAPI = gitExtension.exports.getAPI(1);
             if (gitAPI) {
-                console.log('File Integrator: Successfully obtained Git API.');
+                console.log('CodeLens AI: Successfully obtained Git API.');
             }
             else {
-                console.error('File Integrator: Failed to get Git API from vscode.git extension.');
-                vscode.window.showWarningMessage('File Integrator: Could not initialize Git features. Git API unavailable.');
+                console.error('CodeLens AI: Failed to get Git API from vscode.git extension.');
+                vscode.window.showWarningMessage('CodeLens AI: Could not initialize Git features. Git API unavailable.');
             }
         }
         else {
-            console.warn('File Integrator: vscode.git extension not found.');
-            vscode.window.showWarningMessage('File Integrator: vscode.git extension not installed or disabled. Git features unavailable.');
+            console.warn('CodeLens AI: vscode.git extension not found.');
+            vscode.window.showWarningMessage('CodeLens AI: vscode.git extension not installed or disabled. Git features unavailable.');
         }
     }
     catch (error) {
-        console.error('File Integrator: Failed to get/activate Git API:', error);
-        vscode.window.showWarningMessage('File Integrator: Could not initialize Git features due to an error.');
+        console.error('CodeLens AI: Failed to get/activate Git API:', error);
+        vscode.window.showWarningMessage('CodeLens AI: Could not initialize Git features due to an error.');
     }
-    // --- End Git API Acquisition ---
     sessionManager = new sessionManager_1.SessionManager(context);
-    sessionManager.loadSessions(); // Load existing sessions
-    fileIntegratorProvider = new treeDataProvider_1.FileIntegratorProvider(sessionManager);
-    treeView = vscode.window.createTreeView('fileIntegratorView', {
-        treeDataProvider: fileIntegratorProvider,
-        dragAndDropController: fileIntegratorProvider, // Enable drag/drop
-        canSelectMany: true // Allow multi-select for potential future actions
+    sessionManager.loadSessions();
+    codeLensAiProvider = new treeDataProvider_1.CodeLensAiProvider(sessionManager);
+    treeView = vscode.window.createTreeView('codeLensAiView', {
+        treeDataProvider: codeLensAiProvider,
+        dragAndDropController: codeLensAiProvider,
+        canSelectMany: true
     });
     context.subscriptions.push(treeView);
-    registerCommands(context); // Register all commands
-    // Clean up session manager on deactivate
+    registerCommands(context);
     context.subscriptions.push({ dispose: () => sessionManager.dispose() });
-    console.log('File Integrator activated.');
+    console.log('CodeLens AI activated.');
 }
-// --- Command Registration ---
+/**
+ * Registers all commands for the extension.
+ */
 function registerCommands(context) {
     const register = (commandId, callback) => {
         context.subscriptions.push(vscode.commands.registerCommand(commandId, callback));
     };
-    // --- Existing Session Commands ---
-    register('fileintegrator.addSession', async () => {
+    register('codelensai.addSession', async () => {
         const n = await vscode.window.showInputBox({ prompt: "Enter new session name", value: `Session ${sessionManager.getAllSessions().length + 1}` });
         if (n?.trim()) {
             const s = sessionManager.createSession(n.trim());
-            fileIntegratorProvider.refresh();
+            codeLensAiProvider.refresh();
             await treeView.reveal(new treeItems_1.SessionItem(s), { select: true, focus: true, expand: true });
         }
     });
-    register('fileintegrator.removeSession', async (item) => {
+    register('codelensai.removeSession', async (item) => {
         const s = item?.session ?? await (0, utils_1.selectSession)('Select session to remove', sessionManager);
         if (!s)
             return;
         if (await vscode.window.showWarningMessage(`Remove session "${s.name}" and close its associated document (if open)?`, { modal: true }, 'Yes') === 'Yes') {
-            await s.closeAssociatedDocument(true); // Attempt to close editor
+            await s.closeAssociatedDocument(true);
             if (sessionManager.removeSession(s.id))
-                fileIntegratorProvider.refresh();
+                codeLensAiProvider.refresh();
         }
     });
-    register('fileintegrator.renameSession', async (item) => {
+    register('codelensai.renameSession', async (item) => {
         const s = item?.session ?? await (0, utils_1.selectSession)('Select session to rename', sessionManager);
         if (!s)
             return;
         const n = await vscode.window.showInputBox({ prompt: `Enter new name for "${s.name}"`, value: s.name });
         if (n?.trim() && n.trim() !== s.name && sessionManager.renameSession(s.id, n.trim())) {
-            fileIntegratorProvider.refresh();
+            codeLensAiProvider.refresh();
         }
     });
-    register('fileintegrator.clearSession', async (item) => {
+    register('codelensai.clearSession', async (item) => {
         const s = item?.session ?? await (0, utils_1.selectSession)('Select session to clear', sessionManager);
         if (!s)
             return;
@@ -133,12 +135,11 @@ function registerCommands(context) {
         }
         const count = s.storage.clearFiles();
         sessionManager.persistSessions();
-        fileIntegratorProvider.refresh();
-        await (0, utils_1.updateCodeBlockDocument)(s); // Update associated doc
+        codeLensAiProvider.refresh();
+        await (0, utils_1.updateCodeBlockDocument)(s);
         vscode.window.showInformationMessage(`Cleared ${count} items from session "${s.name}".`);
     });
-    // --- Existing Content Generation & Copying ---
-    register('fileintegrator.generateCodeBlock', async (item) => {
+    register('codelensai.generateCodeBlock', async (item) => {
         const s = item?.session ?? await (0, utils_1.selectSession)('Select session to generate code block for', sessionManager);
         if (!s)
             return;
@@ -150,7 +151,7 @@ function registerCommands(context) {
         if (doc)
             await vscode.window.showTextDocument(doc, { preview: false, preserveFocus: false });
     });
-    register('fileintegrator.copyToClipboard', async (item) => {
+    register('codelensai.copyToClipboard', async (item) => {
         const s = item?.session ?? await (0, utils_1.selectSession)('Select session to copy content from', sessionManager);
         if (!s)
             return;
@@ -161,10 +162,10 @@ function registerCommands(context) {
         let contentToCopy = '';
         if (s.associatedDocument && !s.associatedDocument.isClosed) {
             contentToCopy = s.associatedDocument.getText();
-            console.log(`[CopyToClipboard] Copying from associated document for session ${s.id}`);
+            // console.log(`[CodeLensAI:CopyToClipboard] Copying from associated document for session ${s.id}`);
         }
         else {
-            console.log(`[CopyToClipboard] Generating fresh content for session ${s.id}`);
+            // console.log(`[CodeLensAI:CopyToClipboard] Generating fresh content for session ${s.id}`);
             contentToCopy = await (0, utils_1.generateMarkdownContent)(s);
         }
         if (contentToCopy && !contentToCopy.startsWith('<!-- No file/resource content')) {
@@ -175,8 +176,7 @@ function registerCommands(context) {
             vscode.window.showWarningMessage("No code block content generated or found to copy.");
         }
     });
-    // --- NEW: Directory-specific Content Generation ---
-    register('fileintegrator.generateDirectoryCodeBlock', async (item) => {
+    register('codelensai.generateDirectoryCodeBlock', async (item) => {
         if (!(item instanceof treeItems_1.ResourceItem) || !item.isDirectory)
             return;
         const session = sessionManager.getSession(item.sessionId);
@@ -192,7 +192,7 @@ function registerCommands(context) {
         const doc = await vscode.workspace.openTextDocument({ content: content, language: 'markdown' });
         await vscode.window.showTextDocument(doc, { preview: false });
     });
-    register('fileintegrator.copyDirectoryContentToClipboard', async (item) => {
+    register('codelensai.copyDirectoryContentToClipboard', async (item) => {
         if (!(item instanceof treeItems_1.ResourceItem) || !item.isDirectory)
             return;
         const session = sessionManager.getSession(item.sessionId);
@@ -208,24 +208,22 @@ function registerCommands(context) {
         await vscode.env.clipboard.writeText(content);
         vscode.window.showInformationMessage(`Content for directory "${directoryName}" copied!`);
     });
-    // --- Existing Item Management ---
-    register('fileintegrator.removeItem', async (item) => {
+    register('codelensai.removeItem', async (item) => {
         if (!(item instanceof treeItems_1.ResourceItem))
             return;
         const s = sessionManager.getSession(item.sessionId);
         if (s && s.storage.removeEntry(item.uriString)) {
             sessionManager.persistSessions();
-            await (0, utils_1.updateCodeBlockDocument)(s); // Update associated doc
-            fileIntegratorProvider.refresh();
+            await (0, utils_1.updateCodeBlockDocument)(s);
+            codeLensAiProvider.refresh();
             vscode.window.showInformationMessage(`Removed "${(0, utils_1.getDisplayUri)(item.uriString, 'treeDescription')}". You can undo this by clicking 'Undo Last Removal' in the tree view.`);
         }
         else {
-            fileIntegratorProvider.refresh();
+            codeLensAiProvider.refresh();
         }
     });
-    register('fileintegrator.refreshView', () => fileIntegratorProvider.refresh());
-    // NEW: Undo Last Removal Command
-    register('fileintegrator.undoLastRemoval', async (item) => {
+    register('codelensai.refreshView', () => codeLensAiProvider.refresh());
+    register('codelensai.undoLastRemoval', async (item) => {
         const s = item?.session ?? await (0, utils_1.selectSession)('Select session to undo last removal for', sessionManager);
         if (!s)
             return;
@@ -236,40 +234,36 @@ function registerCommands(context) {
         const restored = s.storage.undoLastRemoval();
         if (restored && restored.length > 0) {
             sessionManager.persistSessions();
-            await (0, utils_1.updateCodeBlockDocument)(s); // Update associated doc
-            fileIntegratorProvider.refresh();
+            await (0, utils_1.updateCodeBlockDocument)(s);
+            codeLensAiProvider.refresh();
             vscode.window.showInformationMessage(`Successfully restored ${restored.length} item(s) to session "${s.name}".`);
-            // Optionally reveal the first restored item (with error handling)
             try {
                 if (restored.length > 0) {
-                    const restoredItem = fileIntegratorProvider.findTreeItem(restored[0].uriString, s.id);
+                    const restoredItem = codeLensAiProvider.findTreeItem(restored[0].uriString, s.id);
                     if (restoredItem) {
                         await treeView.reveal(restoredItem, { select: true, focus: false, expand: true });
                     }
                 }
             }
             catch (revealError) {
-                // Silently handle reveal errors since the main operation (undo) was successful
-                console.log('Could not reveal restored item, but undo was successful:', revealError);
+                // console.log('Could not reveal restored item, but undo was successful:', revealError);
             }
         }
         else {
             vscode.window.showWarningMessage(`Failed to undo last removal for session "${s.name}".`);
         }
     });
-    // --- Existing Adding Items ---
-    register('fileintegrator.addActiveEditorToSession', async (item) => {
+    register('codelensai.addActiveEditorToSession', async (item) => {
         const targetSession = item?.session ?? await (0, utils_1.selectSession)("Select session to add active editor to", sessionManager);
         if (targetSession)
             await addActiveEditorLogic(targetSession);
     });
-    register('fileintegrator.addAllOpenEditorsToSession', async (item) => {
+    register('codelensai.addAllOpenEditorsToSession', async (item) => {
         const session = item?.session ?? await (0, utils_1.selectSession)("Select session to add all open editors to", sessionManager);
         if (session)
             await addAllOpenEditorsLogic(session);
     });
-    // --- NEW: Copy Directory Structure Command ---
-    register('fileintegrator.copyDirectoryStructure', async (item) => {
+    register('codelensai.copyDirectoryStructure', async (item) => {
         let session;
         let startingEntries = [];
         let baseUriString;
@@ -297,18 +291,18 @@ function registerCommands(context) {
             return;
         }
         if (!session) {
-            vscode.window.showErrorMessage("Could not find the session for the selected item.");
+            vscode.window.showErrorMessage("CodeLens AI: Could not find the session for the selected item.");
             return;
         }
         const rootEntry = baseUriString ? session.storage.findEntry(baseUriString) : null;
         if (!rootEntry && baseUriString) {
-            vscode.window.showErrorMessage("Could not find the starting directory entry.");
+            vscode.window.showErrorMessage("CodeLens AI: Could not find the starting directory entry.");
             return;
         }
-        const excludePatterns = vscode.workspace.getConfiguration('fileintegrator').get('excludeFromTree') || {};
+        const excludePatterns = vscode.workspace.getConfiguration('codelensai').get('excludeFromTree') || {};
         const exclusionCheck = (relativePath) => (0, utils_1.isPathExcludedFromTree)(relativePath, excludePatterns);
         try {
-            console.log(`[CopyStructure] Building structure for ${scopeName}`);
+            // console.log(`[CodeLensAI:CopyStructure] Building structure for ${scopeName}`);
             let structureString = '';
             if (rootEntry) {
                 structureString += `${path.basename(vscode.Uri.parse(rootEntry.uriString).fsPath || rootEntry.uriString)}\n`;
@@ -325,17 +319,16 @@ function registerCommands(context) {
             }
             await vscode.env.clipboard.writeText(structureString.trimEnd());
             vscode.window.showInformationMessage(`Directory structure for ${scopeName} copied to clipboard!`);
-            console.log(`[CopyStructure] Copied:\n${structureString.trimEnd()}`);
+            // console.log(`[CodeLensAI:CopyStructure] Copied:\n${structureString.trimEnd()}`);
         }
         catch (error) {
-            console.error(`[CopyStructure] Error building structure for ${scopeName}:`, error);
-            vscode.window.showErrorMessage(`Failed to copy structure: ${error.message}`);
+            console.error(`[CodeLensAI:CopyStructure] Error building structure for ${scopeName}:`, error);
+            vscode.window.showErrorMessage(`CodeLens AI: Failed to copy structure: ${error.message}`);
         }
     });
-    // --- NEW: Git Diff Commands ---
     const diffHandler = async (item, copy) => {
         if (!gitAPI) {
-            vscode.window.showErrorMessage("Git integration is not available.");
+            vscode.window.showErrorMessage("CodeLens AI: Git integration is not available.");
             return;
         }
         let session;
@@ -368,7 +361,7 @@ function registerCommands(context) {
             scopeName = `session "${session.name}"`;
         }
         if (!session) {
-            vscode.window.showErrorMessage("Could not determine session for Git Diff.");
+            vscode.window.showErrorMessage("CodeLens AI: Could not determine session for Git Diff.");
             return;
         }
         if (entriesToDiff.length === 0) {
@@ -387,17 +380,16 @@ function registerCommands(context) {
             vscode.window.showInformationMessage(`No file system items found in ${scopeName} to diff with Git.`);
             return;
         }
-        console.log(`[Diff] Initiating diff for ${scopeName} (${fileSystemEntries.length} potential file system items)`);
+        // console.log(`[CodeLensAI:Diff] Initiating diff for ${scopeName} (${fileSystemEntries.length} potential file system items)`);
         await (0, git_1.generateDiffCommon)(fileSystemEntries, scopeName, (msg) => vscode.window.showInformationMessage(msg), copy, gitAPI);
     };
-    register('fileintegrator.generateDiffDocument', (item) => diffHandler(item, false));
-    register('fileintegrator.copyDiffToClipboard', (item) => diffHandler(item, true));
-    register('fileintegrator.generateDirectoryDiffDocument', (item) => diffHandler(item, false));
-    register('fileintegrator.copyDirectoryDiffToClipboard', (item) => diffHandler(item, true));
-    register('fileintegrator.generateFileDiffDocument', (item) => diffHandler(item, false));
-    register('fileintegrator.copyFileDiffToClipboard', (item) => diffHandler(item, true));
-    // --- Expand All Subdirectories Command ---
-    register('fileintegrator.expandAllSubdirectories', async (item) => {
+    register('codelensai.generateDiffDocument', (item) => diffHandler(item, false));
+    register('codelensai.copyDiffToClipboard', (item) => diffHandler(item, true));
+    register('codelensai.generateDirectoryDiffDocument', (item) => diffHandler(item, false));
+    register('codelensai.copyDirectoryDiffToClipboard', (item) => diffHandler(item, true));
+    register('codelensai.generateFileDiffDocument', (item) => diffHandler(item, false));
+    register('codelensai.copyFileDiffToClipboard', (item) => diffHandler(item, true));
+    register('codelensai.expandAllSubdirectories', async (item) => {
         const s = item?.session ?? await (0, utils_1.selectSession)('Select session to expand all subdirectories for', sessionManager);
         if (!s)
             return;
@@ -408,21 +400,22 @@ function registerCommands(context) {
         }
         try {
             for (const entry of directoryItems) {
-                const treeItem = fileIntegratorProvider.findTreeItem(entry.uriString, s.id);
+                const treeItem = codeLensAiProvider.findTreeItem(entry.uriString, s.id);
                 if (treeItem) {
-                    await treeView.reveal(treeItem, { expand: 3 }); // Expand up to 3 levels deep
+                    await treeView.reveal(treeItem, { expand: 3 });
                 }
             }
             vscode.window.showInformationMessage(`Expanded all directories in session "${s.name}".`);
         }
         catch (error) {
-            console.log('Error expanding directories:', error);
+            // console.log('Error expanding directories:', error);
             vscode.window.showWarningMessage(`Some directories could not be expanded in session "${s.name}".`);
         }
     });
 }
-// --- Command Logic Helpers ---
-/** Logic for adding the active editor's resource to a session. */
+/**
+ * Logic for adding the active editor's resource to a session.
+ */
 async function addActiveEditorLogic(targetSession) {
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
@@ -443,14 +436,16 @@ async function addActiveEditorLogic(targetSession) {
     if (targetSession.storage.addItem(newEntry)) {
         sessionManager.persistSessions();
         await (0, utils_1.updateCodeBlockDocument)(targetSession);
-        fileIntegratorProvider.refresh();
+        codeLensAiProvider.refresh();
         vscode.window.showInformationMessage(`Added "${(0, utils_1.getDisplayUri)(uriString, 'treeDescription')}" to session "${targetSession.name}".`);
     }
     else {
         vscode.window.showWarningMessage(`Failed to add "${(0, utils_1.getDisplayUri)(uriString)}". It might already exist.`);
     }
 }
-/** Logic for adding all unique open editor resources to a session. */
+/**
+ * Logic for adding all unique open editor resources to a session.
+ */
 async function addAllOpenEditorsLogic(targetSession) {
     const openUris = new Set();
     const sessionDocUriString = targetSession.associatedDocument?.uri.toString();
@@ -481,7 +476,7 @@ async function addAllOpenEditorsLogic(targetSession) {
                 addedCount++;
             }
             else {
-                console.warn(`[addAllOpenEditors] Failed to add item ${uriString} even after existence check.`);
+                // console.warn(`[CodeLensAI:addAllOpenEditors] Failed to add item ${uriString} even after existence check.`);
                 skippedCount++;
             }
         }
@@ -489,7 +484,7 @@ async function addAllOpenEditorsLogic(targetSession) {
     if (addedCount > 0) {
         sessionManager.persistSessions();
         await (0, utils_1.updateCodeBlockDocument)(targetSession);
-        fileIntegratorProvider.refresh();
+        codeLensAiProvider.refresh();
         let message = `Added ${addedCount} editor(s) to "${targetSession.name}".`;
         if (skippedCount > 0) {
             message += ` Skipped ${skippedCount} (already present or session document).`;
@@ -500,13 +495,15 @@ async function addAllOpenEditorsLogic(targetSession) {
         vscode.window.showInformationMessage(`All open editors were already present in session "${targetSession.name}" or represent the session document.`);
     }
     else {
-        console.error("[addAllOpenEditors] Inconsistent state: Found open URIs but added/skipped count is zero.");
+        // console.error("[CodeLensAI:addAllOpenEditors] Inconsistent state: Found open URIs but added/skipped count is zero.");
         vscode.window.showInformationMessage("No new editors were added.");
     }
 }
-// --- Deactivation ---
+/**
+ * This method is called when your extension is deactivated.
+ */
 function deactivate() {
-    console.log('Deactivating File Integrator...');
+    console.log('Deactivating CodeLens AI...');
     gitAPI = undefined;
 }
 //# sourceMappingURL=extension.js.map

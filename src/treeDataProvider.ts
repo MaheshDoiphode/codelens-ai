@@ -5,73 +5,84 @@ import { Session } from './session';
 import { IntegratorTreeItem, SessionItem, ResourceItem } from './treeItems';
 import { isPathExcluded, updateCodeBlockDocument, getDisplayUri } from './utils';
 
-// --- Tree Data Provider ---
-export class FileIntegratorProvider implements vscode.TreeDataProvider<IntegratorTreeItem>, vscode.TreeDragAndDropController<IntegratorTreeItem> {
+export class CodeLensAiProvider implements vscode.TreeDataProvider<IntegratorTreeItem>, vscode.TreeDragAndDropController<IntegratorTreeItem> {
     private _onDidChangeTreeData: vscode.EventEmitter<IntegratorTreeItem | undefined | null | void> = new vscode.EventEmitter();
     readonly onDidChangeTreeData: vscode.Event<IntegratorTreeItem | undefined | null | void> = this._onDidChangeTreeData.event;
-    readonly dropMimeTypes = ['text/uri-list', 'application/vnd.code.tree.fileIntegratorView']; // Accept external files and internal items
-    readonly dragMimeTypes = ['application/vnd.code.tree.fileIntegratorView']; // Allow dragging internal items
-    private readonly customMimeType = 'application/vnd.code.tree.fileIntegratorView';
-  
+    readonly dropMimeTypes = ['text/uri-list', 'application/vnd.code.tree.codeLensAiView'];
+    readonly dragMimeTypes = ['application/vnd.code.tree.codeLensAiView'];
+    private readonly customMimeType = 'application/vnd.code.tree.codeLensAiView';
+
 
     constructor(private sessionManager: SessionManager) { }
 
+    /**
+     * Get {@link TreeItem TreeItem} representation of the `element`.
+     * @param element The element for which {@link TreeItem TreeItem} representation is asked for.
+     * @returns {@link TreeItem TreeItem} representation of the element.
+     */
     getTreeItem(element: IntegratorTreeItem): vscode.TreeItem { return element; }
 
+    /**
+     * Get the parent of `element`.
+     * @param element The element for which the parent is asked for.
+     * @returns The parent of `element` or `undefined` if `element` is a root.
+     */
     getParent(element: IntegratorTreeItem): vscode.ProviderResult<IntegratorTreeItem> {
         if (element instanceof ResourceItem) {
             const session = this.sessionManager.getSession(element.sessionId);
             if (!session) return undefined;
-              // If this resource has a parent URI, find the parent ResourceItem
             if (element.entry.parentUriString) {
                 const parentEntry = session.storage.findEntry(element.entry.parentUriString);
                 if (parentEntry) {
-                    return new ResourceItem(parentEntry, 
+                    return new ResourceItem(parentEntry,
                         parentEntry.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
                     );
                 }
             }
-            
-            // If no parent URI, the parent is the session
             return new SessionItem(session,
                 session.storage.files.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
             );
         }
-        
-        // SessionItems have no parent (they are at the root level)
         if (element instanceof SessionItem) {
             return undefined;
         }
-        
         return undefined;
     }
 
+    /**
+     * Get the children of `element` or root if no element is passed.
+     * @param element The element from which the children are asked for.
+     * @returns Children of `element` or root if no element is passed.
+     */
     getChildren(element?: IntegratorTreeItem): vscode.ProviderResult<IntegratorTreeItem[]> {
-        if (!element) { // Root level: Show Sessions
+        if (!element) {
             return Promise.resolve(this.sessionManager.getAllSessions().map(s => new SessionItem(s,
-                s.storage.files.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None // Collapse if not empty
+                s.storage.files.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
             )));
         }
-        if (element instanceof SessionItem) { // Session level: Show root items in the session
+        if (element instanceof SessionItem) {
             const session = this.sessionManager.getSession(element.session.id);
-            if (!session) return [];            // Filter files to get only top-level items (no parentUriString)
+            if (!session) return [];
             const rootEntries = session.storage.files.filter(f => !f.parentUriString);
             return Promise.resolve(rootEntries.map(e => new ResourceItem(e,
                 e.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
             )));
         }
-        if (element instanceof ResourceItem && element.isDirectory) { // Directory level: Show children
+        if (element instanceof ResourceItem && element.isDirectory) {
             const session = this.sessionManager.getSession(element.sessionId);
-            if (!session) return [];            // Filter files to get items whose parent is the current directory's URI
+            if (!session) return [];
             const childEntries = session.storage.files.filter(f => f.parentUriString === element.uriString);
             return Promise.resolve(childEntries.map(e => new ResourceItem(e,
                 e.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
             )));
         }
-        // Should not happen for files or other item types
         return Promise.resolve([]);
     }
 
+    /**
+     * Forcibly refresh the tree view.
+     * @param element The element to refresh, or undefined to refresh the entire view.
+     */
     refresh(element?: IntegratorTreeItem): void { this._onDidChangeTreeData.fire(element); }
 
     /**
@@ -88,123 +99,113 @@ export class FileIntegratorProvider implements vscode.TreeDataProvider<Integrato
             return new ResourceItem(entry, collapsibleState);
         }
 
-        // If looking for a session item itself (e.g., if session is target for undo)
-        if (session.id === sessionId && !uriString) { // uriString would be empty if looking for session itself
-             return new SessionItem(session, session.storage.files.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
+        if (session.id === sessionId && !uriString) {
+            return new SessionItem(session, session.storage.files.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
         }
 
         return undefined;
     }
 
-    // --- Drag and Drop Implementation ---
-
+    /**
+     * Called when an item is dragged.
+     * @param source The source items for the drag operation.
+     * @param dataTransfer The data transfer object for the drag operation.
+     * @param token A cancellation token.
+     */
     handleDrag(source: readonly IntegratorTreeItem[], dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): void | Thenable<void> {
-        // Only allow dragging ResourceItems (files/dirs within sessions)
         const draggableItems = source.filter((item): item is ResourceItem => item instanceof ResourceItem);
         if (draggableItems.length > 0) {
-            // Store identifiers (session::uri) of dragged items
             const draggedIds = draggableItems.map(item => `${item.sessionId}::${item.uriString}`);
             dataTransfer.set(this.customMimeType, new vscode.DataTransferItem(draggedIds));
         }
-        // Do not allow dragging SessionItems themselves
     }
 
+    /**
+     * Called when an item is dropped.
+     * @param target The target item for the drop operation, or `undefined` if the drop occurs in empty space.
+     * @param dataTransfer The data transfer object for the drop operation.
+     * @param token A cancellation token.
+     */
     async handleDrop(target: IntegratorTreeItem | undefined, dataTransfer: vscode.DataTransfer, token: vscode.CancellationToken): Promise<void> {
         const internalDropItem = dataTransfer.get(this.customMimeType);
-        const externalDropItem = dataTransfer.get('text/uri-list'); // From Explorer, etc.
+        const externalDropItem = dataTransfer.get('text/uri-list');
 
         if (token.isCancellationRequested) return;
 
-        // --- Handle Internal Reorder Drop ---
         if (internalDropItem) {
-            const draggedItemIds = internalDropItem.value as string[]; // Value is string[] we set in handleDrag
+            const draggedItemIds = internalDropItem.value as string[];
             if (!Array.isArray(draggedItemIds) || draggedItemIds.length === 0) return;
 
-            // Extract session ID and URIs from the first dragged item (assume all from same session for now)
             const firstIdParts = draggedItemIds[0].split('::');
-            if (firstIdParts.length < 2) { console.warn('[handleDrop] Invalid dragged item ID format.'); return; }
+            if (firstIdParts.length < 2) { console.warn('[CodeLensAI:handleDrop] Invalid dragged item ID format.'); return; }
             const sessionId = firstIdParts[0];
-            const draggedUriStrings = draggedItemIds.map(id => id.substring(id.indexOf('::') + 2)).filter(Boolean); // Get URI part
+            const draggedUriStrings = draggedItemIds.map(id => id.substring(id.indexOf('::') + 2)).filter(Boolean);
 
             const session = this.sessionManager.getSession(sessionId);
-            if (!session) { console.error(`[handleDrop] Session not found for internal drop: ${sessionId}`); return; }
+            if (!session) { console.error(`[CodeLensAI:handleDrop] Session not found for internal drop: ${sessionId}`); return; }
 
             let targetUriString: string | undefined;
             let dropOnSessionNode = false;
-            let targetParentUriString: string | undefined; // Parent of the drop target location
+            let targetParentUriString: string | undefined;
 
             if (target instanceof SessionItem) {
-                // Dropping onto a session node means moving to the root level of that session
                 if (target.session.id !== sessionId) {
-                    vscode.window.showErrorMessage("Cannot move items between sessions yet."); // TODO: Implement cross-session move later if needed
+                    vscode.window.showErrorMessage("CodeLens AI: Cannot move items between sessions yet.");
                     return;
                 }
                 dropOnSessionNode = true;
-                targetParentUriString = undefined; // Root level has undefined parent
+                targetParentUriString = undefined;
             } else if (target instanceof ResourceItem) {
-                // Dropping onto another resource item
                 if (target.sessionId !== sessionId) {
-                    vscode.window.showErrorMessage("Cannot move items between sessions yet.");
+                    vscode.window.showErrorMessage("CodeLens AI: Cannot move items between sessions yet.");
                     return;
                 }
-                targetUriString = target.uriString; // Target is the item we drop *before*
-                targetParentUriString = target.entry.parentUriString; // Target parent is the parent of the item dropped onto
+                targetUriString = target.uriString;
+                targetParentUriString = target.entry.parentUriString;
             } else {
-                // Dropping onto empty space (not on a specific item) within the view
-                // Assume drop into the root of the first session if no target? Or disallow?
-                // For simplicity, let's assume dropping in empty space means dropping onto the nearest session node visually
-                // This case needs more defined behavior. Let's require dropping *onto* an item for now.
-                console.log("[handleDrop] Drop target is undefined (empty space). Requires dropping onto Session or Resource item.");
+                // console.log("[CodeLensAI:handleDrop] Drop target is undefined (empty space). Requires dropping onto Session or Resource item.");
                 return;
             }
 
-            // Check if parents match (or if dropping on session to move to root)
             const firstDraggedItem = session.storage.findEntry(draggedUriStrings[0]);
-            if (!firstDraggedItem) return; // Should not happen
+            if (!firstDraggedItem) return;
             const sourceParentUriString = firstDraggedItem.parentUriString;
 
             if (!dropOnSessionNode && sourceParentUriString !== targetParentUriString) {
-                vscode.window.showWarningMessage("Cannot move items between different directory levels yet.");
+                vscode.window.showWarningMessage("CodeLens AI: Cannot move items between different directory levels yet.");
                 return;
             }
 
-
-            // Perform the reorder in storage
             const success = session.storage.reorderItems(draggedUriStrings, targetUriString, dropOnSessionNode);
 
             if (success) {
-                this.sessionManager.persistSessions(); // Save the new order
-                await updateCodeBlockDocument(session); // Update associated doc if open
-                this.refresh(); // Refresh the tree view
+                this.sessionManager.persistSessions();
+                await updateCodeBlockDocument(session);
+                this.refresh();
             } else {
-                this.refresh(); // Refresh even on failure to reset visual state if needed
+                this.refresh();
             }
         }
-        // --- Handle External File/Folder Drop (from Explorer) ---
         else if (externalDropItem) {
             let targetSession: Session | undefined;
 
-            // Determine the target session based on where the drop occurred
             if (target instanceof SessionItem) {
                 targetSession = target.session;
             } else if (target instanceof ResourceItem) {
-                // If dropped on a resource, add to that resource's session
                 targetSession = this.sessionManager.getSession(target.sessionId);
             } else {
-                // If dropped on empty space, add to the first session (or prompt?)
                 const sessions = this.sessionManager.getAllSessions();
-                targetSession = sessions[0]; // Default to the first session
+                targetSession = sessions[0];
                 if (targetSession && sessions.length > 1) {
-                    // Maybe prompt if multiple sessions exist? For now, just inform.
-                    vscode.window.showInformationMessage(`Added resources to the first session: "${targetSession.name}"`);
+                    vscode.window.showInformationMessage(`CodeLens AI: Added resources to the first session: "${targetSession.name}"`);
                 } else if (!targetSession) {
-                    vscode.window.showErrorMessage("Cannot add resources: No sessions exist.");
-                    return; // No session to add to
+                    vscode.window.showErrorMessage("CodeLens AI: Cannot add resources: No sessions exist.");
+                    return;
                 }
             }
 
             if (!targetSession) {
-                vscode.window.showErrorMessage("Could not determine target session for drop.");
+                vscode.window.showErrorMessage("CodeLens AI: Could not determine target session for drop.");
                 return;
             }
 
@@ -214,15 +215,15 @@ export class FileIntegratorProvider implements vscode.TreeDataProvider<Integrato
 
             let resourcesWereAdded = false;
             let skippedCount = 0;
-            const skippedExclusion: string[] = []; // Track files skipped due to exclusion
+            const skippedExclusion: string[] = [];
 
             await vscode.window.withProgress({
                 location: vscode.ProgressLocation.Notification,
-                title: `Adding to session "${targetSession.name}"...`,
+                title: `CodeLens AI: Adding to session "${targetSession.name}"...`,
                 cancellable: true
             }, async (progress, progressToken) => {
                 progressToken.onCancellationRequested(() => {
-                    console.log("User cancelled resource adding.");
+                    // console.log("User cancelled resource adding.");
                 });
 
                 for (let i = 0; i < uriStrings.length; i++) {
@@ -230,47 +231,39 @@ export class FileIntegratorProvider implements vscode.TreeDataProvider<Integrato
                     const uriStr = uriStrings[i];
                     let currentUri: vscode.Uri | undefined;
                     try {
-                        currentUri = vscode.Uri.parse(uriStr, true); // Strict parsing
+                        currentUri = vscode.Uri.parse(uriStr, true);
                         const displayPath = currentUri.scheme === 'file' ? currentUri.fsPath : uriStr;
 
-                        // *** Check DRAG & DROP exclusion ('fileintegrator.exclude') here ***
-                        // This is the primary check for top-level dragged items.
                         if (currentUri.scheme === 'file' && isPathExcluded(displayPath)) {
-                            console.log(`[Exclude][HandleDrop] Skipping excluded: ${displayPath}`);
+                            // console.log(`[CodeLensAI:Exclude][HandleDrop] Skipping excluded: ${displayPath}`);
                             skippedExclusion.push(path.basename(displayPath));
                             skippedCount++;
-                            continue; // Skip this URI entirely
+                            continue;
                         }
 
                         progress.report({ message: `(${i + 1}/${uriStrings.length}) Adding ${getDisplayUri(uriStr, 'treeDescription')}`, increment: (1 / uriStrings.length) * 100 });
 
-                        // addResource handles recursion and its own internal exclusion checks
                         if (await targetSession!.storage.addResource(currentUri)) {
                             resourcesWereAdded = true;
                         } else {
-                            // Could be duplicate or internal exclusion during recursion
-                            // We don't double-count skips here as addResource handles its own logging
-                            // If addResource returned false and it wasn't excluded here, it's likely a duplicate
                             if (!(currentUri.scheme === 'file' && isPathExcluded(displayPath))) {
-                                console.log(`[handleDrop] Item likely skipped as duplicate or error during add: ${uriStr}`);
-                                // Consider adding to a general skipped count if not excluded
+                                // console.log(`[CodeLensAI:handleDrop] Item likely skipped as duplicate or error during add: ${uriStr}`);
                             }
                         }
                     } catch (err: any) {
                         const displayUriStr = currentUri?.toString() ?? uriStr;
-                        vscode.window.showErrorMessage(`Error processing ${getDisplayUri(displayUriStr)}: ${err.message}`);
-                        console.error(`Error processing URI ${displayUriStr}:`, err);
-                        skippedCount++; // Count errors as skipped
+                        vscode.window.showErrorMessage(`CodeLens AI: Error processing ${getDisplayUri(displayUriStr)}: ${err.message}`);
+                        console.error(`[CodeLensAI:handleDrop] Error processing URI ${displayUriStr}:`, err);
+                        skippedCount++;
                     }
                 }
-            }); // End withProgress
+            });
 
             if (resourcesWereAdded) {
-                this.sessionManager.persistSessions(); // Save changes
-                await updateCodeBlockDocument(targetSession); // Update associated doc
+                this.sessionManager.persistSessions();
+                await updateCodeBlockDocument(targetSession);
             }
 
-            // Provide feedback on skipped items
             let message = '';
             if (resourcesWereAdded && skippedExclusion.length > 0) message = `Added items. Skipped ${skippedExclusion.length} due to exclusion rules: ${skippedExclusion.slice(0, 3).join(', ')}${skippedExclusion.length > 3 ? '...' : ''}`;
             else if (resourcesWereAdded && skippedCount > 0) message = `Added items. ${skippedCount} other item(s) were skipped (duplicates, errors).`;
@@ -279,9 +272,9 @@ export class FileIntegratorProvider implements vscode.TreeDataProvider<Integrato
 
             if (message) vscode.window.showInformationMessage(message);
 
-            this.refresh(); // Refresh the view regardless
+            this.refresh();
         } else {
-            console.log('[handleDrop] No supported data transfer item found.');
+            // console.log('[CodeLensAI:handleDrop] No supported data transfer item found.');
         }
     }
 }

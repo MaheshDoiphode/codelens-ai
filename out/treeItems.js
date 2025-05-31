@@ -42,13 +42,11 @@ class SessionItem extends vscode.TreeItem {
     constructor(session, collapsibleState = vscode.TreeItemCollapsibleState.Collapsed) {
         super(session.name, collapsibleState);
         this.session = session;
-        this.id = session.id; // Use session ID as the tree item ID
-        // Set contextValue based on whether session has files to undo
+        this.id = session.id;
         const hasUndoableFiles = session.storage.hasLastRemovedFiles();
-        this.contextValue = hasUndoableFiles ? 'sessionWithUndo' : 'session'; // Used for menu filtering
-        this.iconPath = new vscode.ThemeIcon('folder-library'); // Or 'briefcase' or 'database'
+        this.contextValue = hasUndoableFiles ? 'sessionWithUndo' : 'session';
+        this.iconPath = new vscode.ThemeIcon('folder-library');
         this.tooltip = `Session: ${session.name}`;
-        // Show item count in description
         this.description = `(${session.storage.files.length} items)`;
     }
 }
@@ -59,45 +57,35 @@ class ResourceItem extends vscode.TreeItem {
         const uri = vscode.Uri.parse(entry.uriString);
         let label = '';
         const uriPath = uri.path;
-        const bangIndex = uri.toString().lastIndexOf('!/'); // Check for archive paths like jar:file:/.../lib.jar!/path/to/Class.class
-        // Handle archive paths for label
+        const bangIndex = uri.toString().lastIndexOf('!/');
         if (bangIndex !== -1) {
             const fullUriStr = uri.toString();
-            // Extract path inside the archive
             const internalPath = fullUriStr.substring(bangIndex + 1);
-            // Get the base name from the internal path
             label = path.basename(internalPath.startsWith('/') ? internalPath.substring(1) : internalPath);
         }
         else {
-            // Standard file path label
             label = path.basename(uriPath);
         }
-        // Fallback for non-file URIs or if basename extraction failed
         if (!label && uri.scheme !== 'file') {
-            label = uri.toString().substring(uri.scheme.length + 1); // e.g., untitled:Untitled-1 -> Untitled-1
+            label = uri.toString().substring(uri.scheme.length + 1);
             if (label.startsWith('//'))
-                label = label.substring(2); // Handle authorities like git://
+                label = label.substring(2);
         }
         if (!label)
-            label = entry.uriString; // Absolute fallback
-        super(label, collapsibleState); // Use the extracted label
+            label = entry.uriString;
+        super(label, collapsibleState);
         this.entry = entry;
-        // Set unique ID combining session and URI
         this.id = `${entry.sessionId}::${entry.uriString}`;
-        this.resourceUri = uri; // Make the URI available
-        // Command to open non-directory items on click
+        this.resourceUri = uri;
         if (!entry.isDirectory) {
             this.command = { command: 'vscode.open', title: "Open Resource", arguments: [uri] };
-            this.collapsibleState = vscode.TreeItemCollapsibleState.None; // Files are not expandable
+            this.collapsibleState = vscode.TreeItemCollapsibleState.None;
         }
-        // Set tooltip and description using helper function
         this.tooltip = `${entry.isDirectory ? 'Directory (Git Diff applies to tracked files within)' : 'Resource (Git Diff applies if tracked)'}:\n${(0, utils_1.getDisplayUri)(entry.uriString, 'tooltip')}`;
-        this.description = (0, utils_1.getDisplayUri)(entry.uriString, 'treeDescription'); // Show context path as description
-        // Set context value for menu filtering
+        this.description = (0, utils_1.getDisplayUri)(entry.uriString, 'treeDescription');
         this.contextValue = entry.isDirectory ? 'resourceDirectory' : 'resourceFile';
         this.iconPath = entry.isDirectory ? vscode.ThemeIcon.Folder : vscode.ThemeIcon.File;
     }
-    // Convenience getters
     get sessionId() { return this.entry.sessionId; }
     get uriString() { return this.entry.uriString; }
     get isDirectory() { return this.entry.isDirectory; }
