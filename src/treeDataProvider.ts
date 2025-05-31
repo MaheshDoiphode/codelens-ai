@@ -12,6 +12,7 @@ export class FileIntegratorProvider implements vscode.TreeDataProvider<Integrato
     readonly dropMimeTypes = ['text/uri-list', 'application/vnd.code.tree.fileIntegratorView']; // Accept external files and internal items
     readonly dragMimeTypes = ['application/vnd.code.tree.fileIntegratorView']; // Allow dragging internal items
     private readonly customMimeType = 'application/vnd.code.tree.fileIntegratorView';
+  
 
     constructor(private sessionManager: SessionManager) { }
 
@@ -21,8 +22,7 @@ export class FileIntegratorProvider implements vscode.TreeDataProvider<Integrato
         if (element instanceof ResourceItem) {
             const session = this.sessionManager.getSession(element.sessionId);
             if (!session) return undefined;
-            
-            // If this resource has a parent URI, find the parent ResourceItem
+              // If this resource has a parent URI, find the parent ResourceItem
             if (element.entry.parentUriString) {
                 const parentEntry = session.storage.findEntry(element.entry.parentUriString);
                 if (parentEntry) {
@@ -54,17 +54,15 @@ export class FileIntegratorProvider implements vscode.TreeDataProvider<Integrato
         }
         if (element instanceof SessionItem) { // Session level: Show root items in the session
             const session = this.sessionManager.getSession(element.session.id);
-            if (!session) return [];
-            // Filter files to get only top-level items (no parentUriString)
+            if (!session) return [];            // Filter files to get only top-level items (no parentUriString)
             const rootEntries = session.storage.files.filter(f => !f.parentUriString);
             return Promise.resolve(rootEntries.map(e => new ResourceItem(e,
-                e.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None // Directories are collapsible
+                e.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
             )));
         }
         if (element instanceof ResourceItem && element.isDirectory) { // Directory level: Show children
             const session = this.sessionManager.getSession(element.sessionId);
-            if (!session) return [];
-            // Filter files to get items whose parent is the current directory's URI
+            if (!session) return [];            // Filter files to get items whose parent is the current directory's URI
             const childEntries = session.storage.files.filter(f => f.parentUriString === element.uriString);
             return Promise.resolve(childEntries.map(e => new ResourceItem(e,
                 e.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
@@ -86,7 +84,8 @@ export class FileIntegratorProvider implements vscode.TreeDataProvider<Integrato
 
         const entry = session.storage.findEntry(uriString);
         if (entry) {
-            return new ResourceItem(entry, entry.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
+            const collapsibleState = entry.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
+            return new ResourceItem(entry, collapsibleState);
         }
 
         // If looking for a session item itself (e.g., if session is target for undo)

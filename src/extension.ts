@@ -50,11 +50,9 @@ export async function activate(context: vscode.ExtensionContext) {
     sessionManager = new SessionManager(context);
     sessionManager.loadSessions(); // Load existing sessions
 
-    fileIntegratorProvider = new FileIntegratorProvider(sessionManager);
-    treeView = vscode.window.createTreeView('fileIntegratorView', {
+    fileIntegratorProvider = new FileIntegratorProvider(sessionManager);    treeView = vscode.window.createTreeView('fileIntegratorView', {
         treeDataProvider: fileIntegratorProvider,
         dragAndDropController: fileIntegratorProvider, // Enable drag/drop
-        showCollapseAll: true, // Add collapse all button
         canSelectMany: true // Allow multi-select for potential future actions
     });
     context.subscriptions.push(treeView);
@@ -330,14 +328,36 @@ function registerCommands(context: vscode.ExtensionContext) {
             copy,
             gitAPI
         );
-    };
-
-    register('fileintegrator.generateDiffDocument', (item?: SessionItem) => diffHandler(item, false));
-    register('fileintegrator.copyDiffToClipboard', (item?: SessionItem) => diffHandler(item, true));
-    register('fileintegrator.generateDirectoryDiffDocument', (item: ResourceItem) => diffHandler(item, false));
+    };    register('fileintegrator.generateDiffDocument', (item?: SessionItem) => diffHandler(item, false));
+    register('fileintegrator.copyDiffToClipboard', (item?: SessionItem) => diffHandler(item, true));    register('fileintegrator.generateDirectoryDiffDocument', (item: ResourceItem) => diffHandler(item, false));
     register('fileintegrator.copyDirectoryDiffToClipboard', (item: ResourceItem) => diffHandler(item, true));
     register('fileintegrator.generateFileDiffDocument', (item: ResourceItem) => diffHandler(item, false));
     register('fileintegrator.copyFileDiffToClipboard', (item: ResourceItem) => diffHandler(item, true));
+
+    // --- Expand All Subdirectories Command ---
+    register('fileintegrator.expandAllSubdirectories', async (item?: SessionItem) => {
+        const s = item?.session ?? await selectSession('Select session to expand all subdirectories for', sessionManager);
+        if (!s) return;
+
+        const directoryItems = s.storage.files.filter((entry: FileEntry) => entry.isDirectory);
+        if (directoryItems.length === 0) {
+            vscode.window.showInformationMessage(`No directories found in session "${s.name}".`);
+            return;
+        }
+
+        try {
+            for (const entry of directoryItems) {
+                const treeItem = fileIntegratorProvider.findTreeItem(entry.uriString, s.id);
+                if (treeItem) {
+                    await treeView.reveal(treeItem, { expand: 3 }); // Expand up to 3 levels deep
+                }
+            }
+            vscode.window.showInformationMessage(`Expanded all directories in session "${s.name}".`);
+        } catch (error) {
+            console.log('Error expanding directories:', error);
+            vscode.window.showWarningMessage(`Some directories could not be expanded in session "${s.name}".`);
+        }
+    });
 }
 
 // --- Command Logic Helpers ---

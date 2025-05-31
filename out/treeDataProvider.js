@@ -79,17 +79,14 @@ class FileIntegratorProvider {
         if (element instanceof treeItems_1.SessionItem) { // Session level: Show root items in the session
             const session = this.sessionManager.getSession(element.session.id);
             if (!session)
-                return [];
-            // Filter files to get only top-level items (no parentUriString)
+                return []; // Filter files to get only top-level items (no parentUriString)
             const rootEntries = session.storage.files.filter(f => !f.parentUriString);
-            return Promise.resolve(rootEntries.map(e => new treeItems_1.ResourceItem(e, e.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None // Directories are collapsible
-            )));
+            return Promise.resolve(rootEntries.map(e => new treeItems_1.ResourceItem(e, e.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None)));
         }
         if (element instanceof treeItems_1.ResourceItem && element.isDirectory) { // Directory level: Show children
             const session = this.sessionManager.getSession(element.sessionId);
             if (!session)
-                return [];
-            // Filter files to get items whose parent is the current directory's URI
+                return []; // Filter files to get items whose parent is the current directory's URI
             const childEntries = session.storage.files.filter(f => f.parentUriString === element.uriString);
             return Promise.resolve(childEntries.map(e => new treeItems_1.ResourceItem(e, e.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None)));
         }
@@ -107,7 +104,8 @@ class FileIntegratorProvider {
             return undefined;
         const entry = session.storage.findEntry(uriString);
         if (entry) {
-            return new treeItems_1.ResourceItem(entry, entry.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
+            const collapsibleState = entry.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None;
+            return new treeItems_1.ResourceItem(entry, collapsibleState);
         }
         // If looking for a session item itself (e.g., if session is target for undo)
         if (session.id === sessionId && !uriString) { // uriString would be empty if looking for session itself
