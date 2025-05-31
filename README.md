@@ -224,7 +224,16 @@ Prevent specific files/folders from appearing in the output of the **"Copy Direc
 
 ## Release Notes
 
-### 1.0.2 (Latest)
+### 1.0.3 (Latest)
+
+- **⚡ Performance: Extension Optimization & Bundling!**
+  - Implemented webpack bundling for significantly improved performance and faster load times.
+  - **📊 Size Reduction:** Package size reduced by over 80%, now only 79.9 KB.
+  - **🚀 Streamlined Structure:** Decreased from 167 files to just 19 files in the extension package.
+  - **⏱️ Faster Loading:** All dependencies now bundled into a single minified JavaScript file.
+  - **🧹 Cleaner Distribution:** Removed unnecessary development files from the published package.
+
+### 1.0.2
 
 -   **🎉 Project Renamed to CodeLens AI & Configuration Update!**
     *   "File Integrator" is now **CodeLens AI**, better reflecting its role in AI-assisted development.
@@ -324,6 +333,10 @@ Prevent specific files/folders from appearing in the output of the **"Copy Direc
 ## Feedback & Contributions
 
 Found a bug or have a feature request? Please open an issue on the [GitHub repository](https://github.com/MaheshDoiphode/codelens-ai/issues)! Contributions are welcome.
+
+## Development
+-   npm run webpack
+-   npx vsce package
 
 ---
 
