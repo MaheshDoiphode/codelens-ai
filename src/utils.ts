@@ -431,48 +431,29 @@ export function buildStructureStringRecursive(
         try {
             if (rootUriString) {
                 const rootUri = vscode.Uri.parse(rootUriString);
-                // Ensure both are file URIs for reliable relative path calculation
+                // For file URIs, calculate relative path directly from rootUri.fsPath
                 if (uri.scheme === 'file' && rootUri.scheme === 'file') {
-                    const fullRelative = path.relative(rootUri.fsPath, uri.fsPath).replace(/\\/g, '/');
-                    // Need path relative *within* the copied structure, not from the absolute root
-                    // Let's adjust based on level, assuming rootUriString is level -1 effectively
-                    // This gets complicated quickly. A simpler approach:
-                    // Check exclusion based on the path segments *below* the rootUriString.
-
-                    // Find common ancestor path logic might be needed for robustness,
-                    // but let's try a simpler relative calculation first.
-                    // path.relative gives path FROM root TO entry.
-                    relativePath = path.relative(path.dirname(rootUri.fsPath), uri.fsPath).replace(/\\/g, '/');
-
-
+                    relativePath = path.relative(rootUri.fsPath, uri.fsPath).replace(/\\/g, '/');
                 } else {
-                    // Fallback for non-file URIs: use path segments
-                    const rootParts = rootUri.path.split('/').filter(Boolean);
-                    const entryParts = uri.path.split('/').filter(Boolean);
-                    // Find common prefix length
+                    // For non-file URIs, try to determine a relative path based on path segments
+                    const rootPathSegments = rootUri.path.split('/').filter(Boolean);
+                    const entryPathSegments = uri.path.split('/').filter(Boolean);
+
                     let commonLength = 0;
-                    while (commonLength < rootParts.length && commonLength < entryParts.length && rootParts[commonLength] === entryParts[commonLength]) {
+                    while (commonLength < rootPathSegments.length && commonLength < entryPathSegments.length && rootPathSegments[commonLength] === entryPathSegments[commonLength]) {
                         commonLength++;
                     }
-                    // Relative path is the part of entryParts after the common prefix relative to the root's parent
-                    // This heuristic might need refinement.
-                    relativePath = entryParts.slice(rootParts.length > 0 ? rootParts.length - 1 : 0).join('/');
-
+                    // The relative path is the part of entryPathSegments after the common prefix
+                    relativePath = entryPathSegments.slice(commonLength).join('/');
                 }
             } else {
-                // If copying from session root, the relative path is the display path itself (potentially)
-                // Or maybe just the name if level 0?
-                // Let's use the full path relative to workspace root if possible.
-                relativePath = getDisplayPath(uri.fsPath || uri.path, false); // Use non-short display path
+                // If no rootUriString (copying from session root), use the display path (which prefers relative to workspace)
+                relativePath = getDisplayPath(uri.fsPath || uri.path, false);
             }
-            if (relativePath.startsWith('../')) { // Clean up relative paths going above root
-                relativePath = relativePath.split('/').pop() || name;
+            // Ensure relativePath is not empty for non-root items, fallback to name
+            if (relativePath === '' && entry.uriString !== rootUriString) {
+                relativePath = name; // If it's a root entry but relative path is empty, use its name
             }
-            // If rootUriString is the direct parent, relative path is just the name
-            if (entry.parentUriString === rootUriString) {
-                relativePath = name;
-            }
-
 
         } catch (e) {
             console.warn(`[CopyStructure] Error calculating relative path for ${entry.uriString} relative to ${rootUriString}: ${e}`);
