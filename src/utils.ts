@@ -137,9 +137,7 @@ export async function generateMarkdownContentForEntries(entries: readonly FileEn
                     ? `--- Error: Resource not found or inaccessible (${displayUri}) ---`
                     : `--- Error reading content for ${displayUri}: ${error.message} ---`;
             }
-        }
-
-        const displayUri = getDisplayUri(entry.uriString, 'markdownHeader');
+        }        const displayUri = getDisplayUri(entry.uriString, 'markdownHeader');
         // Determine language for syntax highlighting
         const uriPath = vscode.Uri.parse(entry.uriString).path;
         // Handle paths inside archives (e.g., .../file.jar!/com/example/MyClass.java)
@@ -147,7 +145,7 @@ export async function generateMarkdownContentForEntries(entries: readonly FileEn
         const ext = path.extname(langPart);
         const lang = ext ? ext.substring(1) : ''; // Get extension without the dot
 
-        content += `### ${displayUri}\n\`\`\`${lang}\n${resourceContent ?? '--- Content Unavailable ---\n'}\`\`\`\n\n`;
+        content += `<file path="${displayUri}">\n${resourceContent ?? '--- Content Unavailable ---\n'}\n</file>\n\n`;
     }
     return content.trimEnd(); // Remove trailing whitespace/newlines
 }

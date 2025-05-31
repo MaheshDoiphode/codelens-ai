@@ -179,7 +179,7 @@ async function generateMarkdownContentForEntries(entries, headerComment) {
         const langPart = uriPath.includes('!/') ? uriPath.substring(uriPath.lastIndexOf('!/') + 1) : uriPath;
         const ext = path.extname(langPart);
         const lang = ext ? ext.substring(1) : ''; // Get extension without the dot
-        content += `### ${displayUri}\n\`\`\`${lang}\n${resourceContent ?? '--- Content Unavailable ---\n'}\`\`\`\n\n`;
+        content += `<file path="${displayUri}">\n${resourceContent ?? '--- Content Unavailable ---\n'}\n</file>\n\n`;
     }
     return content.trimEnd(); // Remove trailing whitespace/newlines
 }
