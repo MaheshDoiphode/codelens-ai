@@ -39,12 +39,11 @@ const session_1 = require("./session");
 class SessionManager {
     context;
     sessions = new Map();
-    static STORAGE_KEY = 'fileIntegratorSessions_v3'; // Keep v3 if structure is compatible
-    static OLD_STORAGE_KEY_V2 = 'fileIntegratorSessions_v2';
-    static OLD_STORAGE_KEY_V1 = 'fileIntegratorSessions';
+    static STORAGE_KEY = 'codeLensAiSessions_v3';
     constructor(context) {
         this.context = context;
     }
+    /** Creates a new session. */
     createSession(name) {
         const sessionName = name || `Session ${this.sessions.size + 1}`;
         const newSession = new session_1.Session(sessionName);
@@ -52,17 +51,19 @@ class SessionManager {
         this.persistSessions();
         return newSession;
     }
+    /** Gets a session by its ID. */
     getSession(id) {
         return this.sessions.get(id);
     }
+    /** Gets all sessions, sorted alphabetically by name. */
     getAllSessions() {
-        // Sort alphabetically by name for consistent display
         return Array.from(this.sessions.values()).sort((a, b) => a.name.localeCompare(b.name));
     }
+    /** Removes a session by its ID. */
     removeSession(id) {
         const session = this.sessions.get(id);
         if (session) {
-            session.dispose(); // Clean up associated resources (like closing doc)
+            session.dispose();
             const deleted = this.sessions.delete(id);
             if (deleted) {
                 this.persistSessions();
@@ -71,6 +72,7 @@ class SessionManager {
         }
         return false;
     }
+    /** Renames a session. */
     renameSession(id, newName) {
         const session = this.sessions.get(id);
         if (session) {
@@ -80,7 +82,7 @@ class SessionManager {
         }
         return false;
     }
-    /** Saves all sessions and their file metadata (URIs, hierarchy) to workspace state. */
+    /** Saves all sessions and their file metadata to workspace state. */
     persistSessions() {
         try {
             const persistedData = this.getAllSessions().map(session => ({
@@ -89,114 +91,65 @@ class SessionManager {
                 files: session.storage.files.map(entry => ({
                     uri: entry.uriString,
                     isDirectory: entry.isDirectory,
-                    parentUri: entry.parentUriString, // Make sure parentUriString is saved
+                    parentUri: entry.parentUriString,
                 }))
             }));
-            // Save to V3 key, clear older keys
             this.context.workspaceState.update(SessionManager.STORAGE_KEY, persistedData);
-            this.context.workspaceState.update(SessionManager.OLD_STORAGE_KEY_V2, undefined);
-            this.context.workspaceState.update(SessionManager.OLD_STORAGE_KEY_V1, undefined);
-            console.log(`[Persist] Saved ${persistedData.length} sessions.`);
+            // console.log(`[CodeLensAI:Persist] Saved ${persistedData.length} sessions.`);
         }
         catch (e) {
-            console.error("[Persist] Error saving session data:", e);
-            vscode.window.showErrorMessage("Error saving File Integrator session data.");
+            console.error("[CodeLensAI:Persist] Error saving session data:", e);
+            vscode.window.showErrorMessage("CodeLens AI: Error saving session data.");
         }
     }
-    /** Loads sessions from workspace state, handling migration from older formats. */
+    /** Loads sessions from workspace state. */
     loadSessions() {
         this.sessions.clear();
         let loadedData = undefined;
-        let loadedFromOldKey = false;
         try {
-            // Try loading from the current key first
+            // Only try loading from the current CodeLens AI key
             loadedData = this.context.workspaceState.get(SessionManager.STORAGE_KEY);
-            // Migration from V2 (path-based) if V3 data not found
             if (!loadedData) {
-                const oldDataV2 = this.context.workspaceState.get(SessionManager.OLD_STORAGE_KEY_V2); // Type might be slightly different
-                if (oldDataV2 && oldDataV2.length > 0) {
-                    console.log("[Load] Migrating data from V2 storage key (path -> uri).");
-                    // Convert V2 structure (assuming {id, name, files: [{path, isDirectory, parent}]}) to V3
-                    loadedData = oldDataV2.map(metaV2 => ({
-                        id: metaV2.id, name: metaV2.name,
-                        files: (metaV2.files || []).map((pfV2) => {
-                            if (!pfV2 || typeof pfV2.path !== 'string')
-                                return null; // Basic validation
-                            try {
-                                const fileUri = vscode.Uri.file(pfV2.path);
-                                const parentUri = pfV2.parent ? vscode.Uri.file(pfV2.parent) : undefined;
-                                return { uri: fileUri.toString(), isDirectory: !!pfV2.isDirectory, parentUri: parentUri?.toString() };
-                            }
-                            catch (e) {
-                                console.warn(`[Load Migration V2] Error converting path ${pfV2.path} to URI:`, e);
-                                return null;
-                            }
-                        }).filter((pf) => pf !== null)
-                    }));
-                    loadedFromOldKey = true;
-                }
+                loadedData = []; // Ensure loadedData is an array if nothing was found
             }
-            // Migration from V1 (only session names/ids) if V2/V3 data not found
-            if (!loadedData) {
-                const oldDataV1 = this.context.workspaceState.get(SessionManager.OLD_STORAGE_KEY_V1);
-                if (oldDataV1 && oldDataV1.length > 0) {
-                    console.log("[Load] Migrating data from V1 storage key (basic).");
-                    loadedData = oldDataV1.map(metaV1 => ({ id: metaV1.id, name: metaV1.name, files: [] })); // Create sessions with empty file lists
-                    loadedFromOldKey = true;
-                }
-                else {
-                    loadedData = []; // Ensure loadedData is an array if nothing was found
-                }
-            }
-            // Process loaded/migrated data (now assumed to be in PersistedSession[] format)
             loadedData.forEach(meta => {
-                // Validate basic structure
                 if (!meta || typeof meta.id !== 'string' || typeof meta.name !== 'string' || !Array.isArray(meta.files)) {
-                    console.warn("[Load] Skipping invalid session metadata entry:", meta);
+                    console.warn("[CodeLensAI:Load] Skipping invalid session metadata entry:", meta);
                     return;
                 }
                 const session = new session_1.Session(meta.name, meta.id);
-                // Restore files from persisted data
                 const restoredFiles = meta.files.map((pf) => {
-                    // Validate each persisted file entry
                     if (!pf || typeof pf.uri !== 'string' || typeof pf.isDirectory !== 'boolean') {
-                        console.warn(`[Load] Skipping invalid persisted file entry in session ${meta.id}:`, pf);
+                        console.warn(`[CodeLensAI:Load] Skipping invalid persisted file entry in session ${meta.id}:`, pf);
                         return null;
                     }
-                    // Validate URIs can be parsed
                     try {
-                        vscode.Uri.parse(pf.uri); // Check main URI
+                        vscode.Uri.parse(pf.uri);
                         if (pf.parentUri)
-                            vscode.Uri.parse(pf.parentUri); // Check parent URI if exists
-                        // Create the internal FileEntry object (content is null initially)
+                            vscode.Uri.parse(pf.parentUri);
                         return { uriString: pf.uri, isDirectory: pf.isDirectory, parentUriString: pf.parentUri, content: null, sessionId: session.id };
                     }
                     catch (e) {
-                        console.warn(`[Load] Skipping entry with invalid URI in session ${meta.id}:`, pf.uri, e);
+                        console.warn(`[CodeLensAI:Load] Skipping entry with invalid URI in session ${meta.id}:`, pf.uri, e);
                         return null;
                     }
-                }).filter((entry) => entry !== null); // Filter out nulls and type guard
+                }).filter((entry) => entry !== null);
                 session.storage.restoreFiles(restoredFiles);
                 this.sessions.set(session.id, session);
             });
-            console.log(`[Load] Loaded ${this.sessions.size} sessions.`);
-            // If migrated from an old key, save immediately in the new format
-            if (loadedFromOldKey) {
-                console.log("[Load] Data migrated from older version, persisting in new format.");
-                this.persistSessions();
-            }
+            // console.log(`[CodeLensAI:Load] Loaded ${this.sessions.size} sessions.`);
         }
         catch (e) {
-            console.error("[Load] Error loading session data:", e);
-            this.sessions.clear(); // Clear potentially corrupted data
-            vscode.window.showErrorMessage("Error loading File Integrator session data. Sessions may be reset.");
+            console.error("[CodeLensAI:Load] Error loading session data:", e);
+            this.sessions.clear();
+            vscode.window.showErrorMessage("CodeLens AI: Error loading session data. Sessions may be reset.");
         }
-        // Ensure there's always at least one session
         if (this.sessions.size === 0) {
-            console.log("[Load] No sessions found or loaded, creating default session.");
-            this.createSession("Default Session"); // Don't persist here, createSession already does
+            // console.log("[CodeLensAI:Load] No sessions found or loaded, creating default session.");
+            this.createSession("Default Session");
         }
     }
+    /** Disposes of all managed sessions. */
     dispose() {
         this.getAllSessions().forEach(s => s.dispose());
         this.sessions.clear();

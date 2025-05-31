@@ -1,21 +1,44 @@
 {
-  "name": "fileintegrator",
-  "displayName": "File Integrator",
+  "name": "codelens-ai",
+  "displayName": "CodeLens AI",
   "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence. Includes Git diff capabilities and directory structure copying.",
-  "version": "1.0.1",
+  "version": "1.0.2",
+  "publisher": "MaheshDoiphode",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.97.0"
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/MaheshDoiphode/vscode-file-integrator.git"
+    "url": "https://github.com/MaheshDoiphode/codelens-ai.git"
   },
+  "bugs": {
+    "url": "https://github.com/MaheshDoiphode/codelens-ai/issues"
+  },
+  "homepage": "https://github.com/MaheshDoiphode/codelens-ai#readme",
   "categories": [
     "Other"
   ],
-  "activationEvents": [
-    "onView:fileIntegratorView"
+  "keywords": [
+    "ai",
+    "llm",
+    "context",
+    "prompt",
+    "code-block",
+    "integrator",
+    "aggregator",
+    "git",
+    "diff",
+    "tree",
+    "documentation",
+    "sharing",
+    "codelens"
   ],
+  "icon": "resources/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
   "main": "./out/extension.js",
   "dependencies": {
     "fs-extra": "^11.2.0",
@@ -38,11 +61,11 @@
   },
   "contributes": {
     "configuration": {
-      "title": "File Integrator",
+      "title": "CodeLens AI",
       "properties": {
-        "fileintegrator.exclude": {
+        "codelensai.exclude": {
           "type": "object",
-          "description": "CONTENT EXCLUSION (Drag & Drop): Configure glob patterns for files and folders (based on file system paths) that File Integrator should exclude when adding items via drag and drop from the Explorer. Does not apply to items added via 'Add Active Editor'. Prepend '**/' to match files/folders anywhere in the path.",
+          "description": "CONTENT EXCLUSION (Drag & Drop): Configure glob patterns for files and folders (based on file system paths) that CodeLens AI should exclude when adding items via drag and drop from the Explorer. Does not apply to items added via 'Add Active Editor'. Prepend '**/' to match files/folders anywhere in the path.",
           "default": {
             "**/.git": true,
             "**/.svn": true,
@@ -67,7 +90,7 @@
             "description": "Set true to exclude matching items during drag/drop."
           }
         },
-        "fileintegrator.excludeFromTree": {
+        "codelensai.excludeFromTree": {
           "type": "object",
           "description": "STRUCTURE EXCLUSION ('Copy Directory Structure'): Configure glob patterns for files and folders (based on relative path within the copied structure) that should be excluded from the 'Copy Directory Structure' output. Uses standard glob syntax relative to the copied root.",
           "default": {
@@ -93,254 +116,256 @@
     },
     "commands": [
       {
-        "command": "fileintegrator.addSession",
+        "command": "codelensai.addSession",
         "title": "New Session",
-        "icon": "$(add)"
+        "icon": "$(new-folder)"
       },
       {
-        "command": "fileintegrator.removeSession",
+        "command": "codelensai.removeSession",
         "title": "Remove Session",
         "icon": "$(trash)"
       },
       {
-        "command": "fileintegrator.renameSession",
+        "command": "codelensai.renameSession",
         "title": "Rename Session",
         "icon": "$(edit)"
       },
       {
-        "command": "fileintegrator.clearSession",
+        "command": "codelensai.clearSession",
         "title": "Clear All Items from Session",
         "icon": "$(clear-all)"
       },
       {
-        "command": "fileintegrator.generateCodeBlock",
+        "command": "codelensai.generateCodeBlock",
         "title": "Generate Code Block (Session)",
-        "icon": "$(markdown)"
+        "icon": "$(file-binary)"
       },
       {
-        "command": "fileintegrator.copyToClipboard",
+        "command": "codelensai.copyToClipboard",
         "title": "Copy Code Block (Session)",
         "icon": "$(copy)"
       },
       {
-        "command": "fileintegrator.removeItem",
+        "command": "codelensai.removeItem",
         "title": "Remove Item",
         "icon": "$(close)"
       },
       {
-        "command": "fileintegrator.refreshView",
+        "command": "codelensai.refreshView",
         "title": "Refresh View",
         "icon": "$(refresh)"
       },
       {
-        "command": "fileintegrator.addActiveEditorToSession",
+        "command": "codelensai.addActiveEditorToSession",
         "title": "Add Active Editor to Session",
         "icon": "$(add)"
       },
       {
-        "command": "fileintegrator.addAllOpenEditorsToSession",
+        "command": "codelensai.addAllOpenEditorsToSession",
         "title": "Add All Open Editors to Session",
         "icon": "$(window)"
       },
       {
-        "command": "fileintegrator.generateDiffDocument",
+        "command": "codelensai.generateDiffDocument",
         "title": "Generate Diff (Session vs HEAD)",
         "icon": "$(git-compare)"
       },
       {
-        "command": "fileintegrator.copyDiffToClipboard",
+        "command": "codelensai.copyDiffToClipboard",
         "title": "Copy Diff (Session vs HEAD)",
         "icon": "$(clippy)"
       },
       {
-        "command": "fileintegrator.generateDirectoryDiffDocument",
+        "command": "codelensai.generateDirectoryDiffDocument",
         "title": "Generate Diff (Directory vs HEAD)",
         "icon": "$(git-compare)"
       },
       {
-        "command": "fileintegrator.copyDirectoryDiffToClipboard",
+        "command": "codelensai.copyDirectoryDiffToClipboard",
         "title": "Copy Diff (Directory vs HEAD)",
         "icon": "$(clippy)"
       },
       {
-        "command": "fileintegrator.generateFileDiffDocument",
+        "command": "codelensai.generateFileDiffDocument",
         "title": "Generate Diff (File vs HEAD)",
         "icon": "$(git-compare)"
       },
       {
-        "command": "fileintegrator.copyFileDiffToClipboard",
+        "command": "codelensai.copyFileDiffToClipboard",
         "title": "Copy Diff (File vs HEAD)",
         "icon": "$(clippy)"
       },
       {
-        "command": "fileintegrator.copyDirectoryStructure",
+        "command": "codelensai.copyDirectoryStructure",
         "title": "Copy Directory Structure",
-        "icon": "$(list-tree)"
+        "icon": "$(list-ordered)"
       },
       {
-        "command": "fileintegrator.generateDirectoryCodeBlock",
+        "command": "codelensai.generateDirectoryCodeBlock",
         "title": "Generate Code Block (Directory)",
-        "icon": "$(markdown)"
+        "icon": "$(file-binary)"
       },
       {
-        "command": "fileintegrator.copyDirectoryContentToClipboard",
+        "command": "codelensai.copyDirectoryContentToClipboard",
         "title": "Copy Code Block (Directory)",
         "icon": "$(copy)"
       },
       {
-        "command": "fileintegrator.undoLastRemoval",
+        "command": "codelensai.undoLastRemoval",
         "title": "Undo Last Removal",
-        "icon": "$(arrow-left)"
+        "icon": "$(discard)"
       },
       {
-        "command": "fileintegrator.expandAllSubdirectories",
+        "command": "codelensai.expandAllSubdirectories",
         "title": "Expand All Subdirectories",
-        "icon": "$(expand-all)"
+        "icon": "$(fold-down)"
       }
     ],
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "file-integrator",
-          "title": "File Integrator",
-          "icon": "resources/file-integrator.svg"
+          "id": "codelens-ai-activitybar",
+          "title": "CodeLens AI",
+          "icon": "resources/icon2.svg"
         }
       ]
     },
     "views": {
-      "file-integrator": [
+      "codelens-ai-activitybar": [
         {
-          "id": "fileIntegratorView",
-          "name": "Integration Sessions"
+          "id": "codeLensAiView",
+          "name": "CodeLens AI Sessions"
         }
       ]
     },
     "menus": {
       "view/title": [
         {
-          "command": "fileintegrator.addSession",
-          "when": "view == fileIntegratorView",
+          "command": "codelensai.addSession",
+          "when": "view == codeLensAiView",
           "group": "navigation@1"
         },
         {
-          "command": "fileintegrator.refreshView",
-          "when": "view == fileIntegratorView",
+          "command": "codelensai.refreshView",
+          "when": "view == codeLensAiView",
           "group": "navigation@2"
         }
       ],
       "view/item/context": [
         {
-          "command": "fileintegrator.addActiveEditorToSession",
-          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "command": "codelensai.addActiveEditorToSession",
+          "when": "view == codeLensAiView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@0"
         },
         {
-          "command": "fileintegrator.addAllOpenEditorsToSession",
-          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "command": "codelensai.addAllOpenEditorsToSession",
+          "when": "view == codeLensAiView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@0.5"
         },
         {
-          "command": "fileintegrator.generateCodeBlock",
-          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "command": "codelensai.generateCodeBlock",
+          "when": "view == codeLensAiView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@1"
         },
         {
-          "command": "fileintegrator.copyToClipboard",
-          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "command": "codelensai.copyToClipboard",
+          "when": "view == codeLensAiView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@2"
         },
         {
-          "command": "fileintegrator.clearSession",
-          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "command": "codelensai.clearSession",
+          "when": "view == codeLensAiView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@3"
         },
         {
-          "command": "fileintegrator.generateDiffDocument",
-          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "command": "codelensai.generateDiffDocument",
+          "when": "view == codeLensAiView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "1_diff@1"
         },
         {
-          "command": "fileintegrator.copyDiffToClipboard",
-          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "command": "codelensai.copyDiffToClipboard",
+          "when": "view == codeLensAiView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "1_diff@2"
         },
         {
-          "command": "fileintegrator.undoLastRemoval",
-          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "command": "codelensai.undoLastRemoval",
+          "when": "view == codeLensAiView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "2_undo@1"
         },
         {
-          "command": "fileintegrator.expandAllSubdirectories",
-          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "command": "codelensai.expandAllSubdirectories",
+          "when": "view == codeLensAiView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "3_expand_collapse@2"
         },
         {
-          "command": "fileintegrator.copyDirectoryStructure",
-          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "command": "codelensai.copyDirectoryStructure",
+          "when": "view == codeLensAiView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "4_structure@1"
         },
         {
-          "command": "fileintegrator.renameSession",
-          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "command": "codelensai.renameSession",
+          "when": "view == codeLensAiView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "5_modification@1"
         },
         {
-          "command": "fileintegrator.removeSession",
-          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "command": "codelensai.removeSession",
+          "when": "view == codeLensAiView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "5_modification@2"
         },
         {
-          "command": "fileintegrator.generateDirectoryCodeBlock",
-          "when": "view == fileIntegratorView && viewItem == resourceDirectory",
+          "command": "codelensai.generateDirectoryCodeBlock",
+          "when": "view == codeLensAiView && viewItem == resourceDirectory",
           "group": "inline@0"
         },
         {
-          "command": "fileintegrator.copyDirectoryContentToClipboard",
-          "when": "view == fileIntegratorView && viewItem == resourceDirectory",
+          "command": "codelensai.copyDirectoryContentToClipboard",
+          "when": "view == codeLensAiView && viewItem == resourceDirectory",
           "group": "inline@0.5"
         },
         {
-          "command": "fileintegrator.copyDirectoryStructure",
-          "when": "view == fileIntegratorView && viewItem == resourceDirectory",
+          "command": "codelensai.copyDirectoryStructure",
+          "when": "view == codeLensAiView && viewItem == resourceDirectory",
           "group": "inline@1"
         },
         {
-          "command": "fileintegrator.generateDirectoryDiffDocument",
-          "when": "view == fileIntegratorView && viewItem == resourceDirectory",
+          "command": "codelensai.generateDirectoryDiffDocument",
+          "when": "view == codeLensAiView && viewItem == resourceDirectory",
           "group": "1_diff@1"
         },
         {
-          "command": "fileintegrator.copyDirectoryDiffToClipboard",
-          "when": "view == fileIntegratorView && viewItem == resourceDirectory",
+          "command": "codelensai.copyDirectoryDiffToClipboard",
+          "when": "view == codeLensAiView && viewItem == resourceDirectory",
           "group": "1_diff@2"
         },
         {
-          "command": "fileintegrator.removeItem",
-          "when": "view == fileIntegratorView && viewItem == resourceDirectory",
+          "command": "codelensai.removeItem",
+          "when": "view == codeLensAiView && viewItem == resourceDirectory",
           "group": "2_modification@1"
         },
         {
-          "command": "fileintegrator.generateFileDiffDocument",
-          "when": "view == fileIntegratorView && viewItem == resourceFile",
+          "command": "codelensai.removeItem",
+          "when": "view == codeLensAiView && viewItem == resourceDirectory",
+          "group": "inline@2"
+        },
+        {
+          "command": "codelensai.generateFileDiffDocument",
+          "when": "view == codeLensAiView && viewItem == resourceFile",
           "group": "1_diff@1"
         },
         {
-          "command": "fileintegrator.copyFileDiffToClipboard",
-          "when": "view == fileIntegratorView && viewItem == resourceFile",
+          "command": "codelensai.copyFileDiffToClipboard",
+          "when": "view == codeLensAiView && viewItem == resourceFile",
           "group": "1_diff@2"
         },
         {
-          "command": "fileintegrator.removeItem",
-          "when": "view == fileIntegratorView && viewItem == resourceFile",
+          "command": "codelensai.removeItem",
+          "when": "view == codeLensAiView && viewItem == resourceFile",
           "group": "2_modification@1"
         },
         {
-          "command": "vscode.open",
-          "when": "view == fileIntegratorView && (viewItem == resourceFile || viewItem == resourceDirectory)",
-          "group": "navigation",
-          "args": [
-            "{{resourceUri}}"
-          ]
+          "command": "codelensai.removeItem",
+          "when": "view == codeLensAiView && viewItem == resourceFile",
+          "group": "inline@0"
         }
       ]
     }

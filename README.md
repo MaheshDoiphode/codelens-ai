@@ -1,10 +1,10 @@
-# File Integrator for VS Code
+# CodeLens AI for VS Code
 
 Easily collect, organize, order, and format content from files, directories, **and other VS Code resources** within your editor! Perfect for creating context for LLMs, assembling documentation, sharing code snippets, **viewing scoped Git diffs**, or **copying directory structures**.
 
-## Why File Integrator? 🤔
+## Why CodeLens AI? 🤔
 
-Tired of manually copying and pasting code, running separate `git diff` commands, or generating `tree` outputs? File Integrator streamlines these processes:
+Tired of manually copying and pasting code, running separate `git diff` commands, or generating `tree` outputs? CodeLens AI streamlines these processes:
 
 -   **🧠 LLM Prompting:** Quickly gather relevant code snippets and file contents (including from library sources) into a single, ordered, formatted block to provide maximum context for AI assistants like ChatGPT, Claude, or Copilot Chat.
 -   **📚 Documentation:** Assemble code examples from different parts of your project or dependencies effortlessly, maintaining a logical order.
@@ -25,8 +25,8 @@ Tired of manually copying and pasting code, running separate `git diff` commands
 -   **👓 Improved Display:** Resources in the tree view show their base name (e.g., `MyClass.java`) as the primary label and the contextual path (e.g., `my-library.jar!/.../mypackage`) as the description. Full path visible in tooltip.
 -   **🖱️ Click to Open:** Single-click any file or resource item in the tree view to open it directly in the editor.
 -   **⚙️ Configurable Exclusions:**
-    *   Define glob patterns (`fileintegrator.exclude`) to ignore unwanted files/folders during **drag-and-drop** from the Explorer.
-    *   Define glob patterns (`fileintegrator.excludeFromTree`) to ignore items when using the **Copy Directory Structure** feature.
+    *   Define glob patterns (`codelensai.exclude`) to ignore unwanted files/folders during **drag-and-drop** from the Explorer.
+    *   Define glob patterns (`codelensai.excludeFromTree`) to ignore items when using the **Copy Directory Structure** feature.
 -   ⚡ **Per-Item Actions:** Quickly perform actions directly on items:
     *   **Inline Icons (Hover):**
         *   **Session:** `➕` (Add Active Editor), `🪟` (Add All Editors), `📄` (Generate), `📋` (Copy Content), `🗑️` (Clear).
@@ -35,8 +35,8 @@ Tired of manually copying and pasting code, running separate `git diff` commands
     *   **Right-Click Context Menu:**
         *   **Session:** Git Diff options, Undo Last Removal, Expand All Subdirectories, Copy Directory Structure, Rename, Remove Session.
         *   **Directory/File:** Git Diff options, Remove Item.
--   **🔄 Undo Functionality:** Easily restore recently removed files or directories using the "Undo Last Removal" option in the right-click menu.
--   **📂 Directory Management:** Expand all subdirectories within a session using right-click menu options for better navigation.
+-   **🔄 Undo Functionality:** Easily restore recently removed files or directories using the "Undo Last Removal" option in the session's right-click menu.
+-   **📂 Directory Management:** Expand all subdirectories within a session using the session's right-click menu options for better navigation.
 -   **📄 On-Demand Generation:** Create clean, editable documents for session content or Git diffs when needed.
 -   **📋 Easy Copying:** Copy formatted Markdown content, Git diffs, or directory structures to your clipboard with single clicks.
 -   **❌ Fine-Grained Removal:** Remove individual resources or directories (and their children) from a session easily via an inline icon.
@@ -48,17 +48,17 @@ Tired of manually copying and pasting code, running separate `git diff` commands
 
 1.  Open **VS Code**.
 2.  Go to the **Extensions** view (Ctrl+Shift+X or Cmd+Shift+X).
-3.  Search for `File Integrator`.
+3.  Search for `CodeLens AI`.
 4.  Click **Install** on the entry by Mahesh Doiphode.
 5.  *(Recommended)* Ensure the built-in **Git** extension (`vscode.git`) is enabled for Diff features.
 
-*(Alternatively, download the `.vsix` from [Releases](https://github.com/MaheshDoiphode/vscode-file-integrator/releases) and install via `Extensions View > ... > Install from VSIX...`)*
+*(Alternatively, download the `.vsix` from [Releases](https://github.com/MaheshDoiphode/vscode-codelens-ai/releases) and install via `Extensions View > ... > Install from VSIX...`)*
 
 ## Getting Started & Usage 📖
 
 1.  **Open the View:**
-    *   Click the **File Integrator icon** in the Activity Bar.
-    *   You'll see the "Integration Sessions" view. A "Default Session" is created if none exist.
+    *   Click the **CodeLens AI icon** in the Activity Bar.
+    *   You'll see the "CodeLens AI Sessions" view (or similar, based on internal naming). A "Default Session" is created if none exist.
 
 2.  **Manage Sessions:**
     *   **Create:** Click the `➕` (New Session) icon in the view's title bar.
@@ -69,18 +69,18 @@ Tired of manually copying and pasting code, running separate `git diff` commands
     *   **Method 1: Drag & Drop (Files/Folders):**
         *   Drag files or directories from the VS Code **Explorer**.
         *   Drop them onto the desired **Session item** or into the view's empty space (adds to the first session).
-        *   Exclusions defined in `fileintegrator.exclude` settings will apply here.
+        *   Exclusions defined in `codelensai.exclude` settings will apply here.
     *   **Method 2: Add Active Editor (Single Resource):**
         *   Open the file or resource you want to add in a VS Code editor tab.
-        *   In the File Integrator view, hover over the desired **Session item**.
+        *   In the CodeLens AI view, hover over the desired **Session item**.
         *   Click the `➕` (Add Active Editor) icon that appears inline.
-        *   (`fileintegrator.exclude` settings do *not* apply here).
+        *   (`codelensai.exclude` settings do *not* apply here).
     *   **Method 3: Add All Open Editors (Multiple Resources):**
         *   Have multiple relevant files open in editor tabs.
-        *   In the File Integrator view, hover over the desired **Session item**.
+        *   In the CodeLens AI view, hover over the desired **Session item**.
         *   Click the `🪟` (Add All Open Editors) icon that appears inline.
         *   All unique open editors (excluding duplicates, items already in the session, and the session's generated document) will be added to the session root.
-        *   (`fileintegrator.exclude` settings do *not* apply here).
+        *   (`codelensai.exclude` settings do *not* apply here).
 
 4.  **Interact with Items:**
     *   Expand/Collapse Session or Directory: Click `▶`/`▼` or the item label.
@@ -99,7 +99,8 @@ Tired of manually copying and pasting code, running separate `git diff` commands
     *   **Right-Click Context Menu:**
         *   Generate Git Diff Document vs HEAD
         *   Copy Git Diff vs HEAD
-        *   Undo Last Removal (restores recently removed files)        *   Expand All Subdirectories
+        *   Undo Last Removal (restores recently removed files)
+        *   Expand All Subdirectories
         *   Copy Directory Structure
         *   Rename Session
         *   Remove Session
@@ -109,17 +110,19 @@ Tired of manually copying and pasting code, running separate `git diff` commands
         *   `📄` (Generate Code Block for Directory Content)
         *   `📋` (Copy Code Block for Directory Content)
         *   `list-tree` (Copy Directory Structure)
+        *   `❌` (Remove Directory and its children from session - inline)
     *   **Directory Items - Right-Click Context Menu:**
         *   Generate Git Diff Document for Directory vs HEAD
         *   Copy Git Diff for Directory vs HEAD
         *   Remove Directory and its children from session
-    *   **File Items (`resourceFile`) - Right-Click Context Menu:**
+    *   **File Items (`resourceFile`) - Inline Icons (Hover):**
+        *   `❌` (Remove File from session - inline)
+    *   **File Items - Right-Click Context Menu:**
         *   Generate Git Diff Document for File vs HEAD
         *   Copy Git Diff for File vs HEAD
         *   Remove File from session
 
 7.  **Advanced Directory Management:**
-
     *   **Expand All Subdirectories:** Right-click on a session and select this option to expand all directories to show their full content (up to 3 levels deep as per VS Code limitations).
     *   **Undo Last Removal:** Accidentally removed files or directories? Right-click on the session and select "Undo Last Removal" to restore the most recently removed items.
 
@@ -137,7 +140,7 @@ Tired of manually copying and pasting code, running separate `git diff` commands
 9.  **Copying Directory Structure (`list-tree` on Directory/Session):**
     *   Generates a text-based tree representation similar to the `tree` command.
     *   Copies the structure to the clipboard.
-    *   Files/folders matching patterns in `fileintegrator.excludeFromTree` (based on their path *relative* to the copied root) will be omitted from the output.
+    *   Files/folders matching patterns in `codelensai.excludeFromTree` (based on their path *relative* to the copied root) will be omitted from the output.
     *   Available via inline icon on Directory items and context menu on Session items.
 
 10. **Edit Generated Code/Diff (Optional):**
@@ -147,7 +150,7 @@ Tired of manually copying and pasting code, running separate `git diff` commands
 
 There are two types of exclusions:
 
-### 1. Content Exclusions (Drag & Drop - `fileintegrator.exclude`)
+### 1. Content Exclusions (Drag & Drop - `codelensai.exclude`)
 
 Prevent unwanted files/folders from being added **when dragging from the Explorer**.
 *   Operates on **full file system paths**.
@@ -158,7 +161,7 @@ Prevent unwanted files/folders from being added **when dragging from the Explore
 ```json
 {
   // ... other settings ...
-  "fileintegrator.exclude": {
+  "codelensai.exclude": {
     "**/.git": true,          // Ignore .git folders anywhere
     "**/node_modules": true,  // Ignore node_modules anywhere
     "**/target": true,
@@ -171,7 +174,7 @@ Prevent unwanted files/folders from being added **when dragging from the Explore
 }
 ```
 
-### 2. Structure Copy Exclusions (`fileintegrator.excludeFromTree`)
+### 2. Structure Copy Exclusions (`codelensai.excludeFromTree`)
 
 Prevent specific files/folders from appearing in the output of the **"Copy Directory Structure"** action.
 *   Operates on paths **relative to the root** of the structure being copied (either the session root or the selected directory).
@@ -182,7 +185,7 @@ Prevent specific files/folders from appearing in the output of the **"Copy Direc
 ```json
 {
   // ... other settings ...
-  "fileintegrator.excludeFromTree": {
+  "codelensai.excludeFromTree": {
     // Common patterns (often match defaults in .gitignore)
     ".git": true,
     "node_modules": true,
@@ -212,7 +215,7 @@ Prevent specific files/folders from appearing in the output of the **"Copy Direc
 
 ## Known Issues & Considerations
 
--   **External Resource Changes:** If a resource added to a session is changed, moved, or deleted *externally*, the link in the File Integrator view becomes stale. Generating content, diffing, or opening it may fail. Remove stale items manually (`❌`).
+-   **External Resource Changes:** If a resource added to a session is changed, moved, or deleted *externally*, the link in the CodeLens AI view becomes stale. Generating content, diffing, or opening it may fail. Remove stale items manually (`❌`).
 -   **Git Diff Scope:** Diff functionality only applies to `file://` URIs that are part of a Git repository recognized by the `vscode.git` extension. Untracked files and non-file resources are ignored. Performance on very large repositories or diffs may vary.
 -   **Structure Copy Relative Paths:** The relative path calculation for `excludeFromTree` works best for standard `file://` URIs within a workspace. Its behavior for non-file URIs or complex nested structures might be less precise.
 -   **Binary Files:** Content display/diffing for binary files may be incorrect or skipped.
@@ -221,7 +224,34 @@ Prevent specific files/folders from appearing in the output of the **"Copy Direc
 
 ## Release Notes
 
-### 1.0.0 (Latest)
+### 1.0.2 (Latest)
+
+-   **🎉 Project Renamed to CodeLens AI & Configuration Update!**
+    *   "File Integrator" is now **CodeLens AI**, better reflecting its role in AI-assisted development.
+    *   **⚠️ IMPORTANT:** Configuration settings in `settings.json` **must be updated**:
+        *   `fileintegrator.exclude` is now **`codelensai.exclude`**.
+        *   `fileintegrator.excludeFromTree` is now **`codelensai.excludeFromTree`**.
+    *   Update your settings if you have custom configurations. Previous `fileintegrator.*` settings are no longer read.
+
+### 1.0.1
+
+-   **🎉 Project Renamed to CodeLens AI!**
+    *   The extension has been renamed from "File Integrator" to "CodeLens AI" to better reflect its capabilities in assisting AI-driven development workflows.
+    *   **Configuration Update:** Settings have been updated:
+        *   `fileintegrator.exclude` is now `codelensai.exclude`.
+        *   `fileintegrator.excludeFromTree` is now `codelensai.excludeFromTree`.
+        *   Please update your `settings.json` if you have custom configurations.
+-   **✨ Feature: Undo Last Removal!**
+    *   Added "Undo Last Removal" functionality to restore recently removed files or directories. Accessible via the session's right-click context menu.
+-   **✨ Feature: Expand All Subdirectories!**
+    *   Introduced "Expand All Subdirectories" option for sessions, allowing easier navigation of nested structures (up to 3 levels deep). Accessible via the session's right-click context menu.
+-   **🎨 UI: Improved Actions and Context Menus!**
+    *   Refined user interface by reorganizing actions. Many common operations are now available as inline hover icons on tree items (Sessions, Directories, Files).
+    *   More comprehensive actions remain in right-click context menus, providing a cleaner and more intuitive user experience.
+-   **🛠️ Fix: Copy Directory Structure Accuracy!**
+    *   Improved the "Copy Directory Structure" feature to more reliably copy the entire intended tree structure.
+
+### 1.0.0
 
 -   **🚀 Feature: Git Diff Integration!**
     *   Added actions to generate Git diffs compared to `HEAD`.
@@ -231,10 +261,10 @@ Prevent specific files/folders from appearing in the output of the **"Copy Direc
     *   Requires the built-in `vscode.git` extension.
 -   **✨ Feature: Copy Directory Structure!**
     *   Added action (`$(list-tree)`) to copy a text-based tree representation of a Session or Directory's contents.
-    *   Output respects exclusions defined in the new `fileintegrator.excludeFromTree` setting.
+    *   Output respects exclusions defined in the new `codelensai.excludeFromTree` setting (formerly `fileintegrator.excludeFromTree`).
     *   Available as inline icon on Directories and via context menu on Sessions.
 -   **⚙️ Feature: New `excludeFromTree` Configuration!**
-    *   Added `fileintegrator.excludeFromTree` setting to control which files/folders (by relative path) are omitted from the "Copy Directory Structure" output.
+    *   Added `codelensai.excludeFromTree` setting (formerly `fileintegrator.excludeFromTree`) to control which files/folders (by relative path) are omitted from the "Copy Directory Structure" output.
 -   **UI:** Moved Git Diff actions for Sessions and Files to be inline icons instead of context menu items for quicker access.
 -   **Fix:** Corrected logic for Git diff calculation, especially for repository root diffs and reporting of "No Changes" vs "No Trackable Files".
 -   **Build:** Added explicit dependency on `vscode.git` extension in `package.json`.
@@ -257,7 +287,7 @@ Prevent specific files/folders from appearing in the output of the **"Copy Direc
 -   **Fix:** Tree view now reliably updates immediately when adding items via "Add Active Editor".
 -   **Fix:** Compilation Errors:** Resolved TypeScript compilation errors related to persistence loading.
 -   **Refactor: Async Content Generation:** Content generation (`generateMarkdownContent`) is now fully asynchronous and reads resource content on demand using VS Code APIs if not already loaded (e.g., after restart).
--   **Perf: Lazy Activation:** Changed activation event to `onView:fileIntegratorView` for faster VS Code startup.
+-   **Perf: Lazy Activation:** Changed activation event to `onView:fileIntegratorView` (internal ID, may change to `onView:codeLensAiView`) for faster VS Code startup.
 
 ### 0.0.6
 
@@ -266,7 +296,7 @@ Prevent specific files/folders from appearing in the output of the **"Copy Direc
 
 ### 0.0.5
 
--   **Added:** File & Directory Exclusion! Configure glob patterns via `fileintegrator.exclude` setting to ignore unwanted items (e.g., `node_modules`, `.git`).
+-   **Added:** File & Directory Exclusion! Configure glob patterns via `codelensai.exclude` setting (formerly `fileintegrator.exclude`) to ignore unwanted items (e.g., `node_modules`, `.git`).
 -   **Added:** Notification when items are skipped due to exclusion rules.
 -   **Improved:** README updated with comprehensive usage and exclusion configuration details.
 
@@ -293,7 +323,7 @@ Prevent specific files/folders from appearing in the output of the **"Copy Direc
 
 ## Feedback & Contributions
 
-Found a bug or have a feature request? Please open an issue on the [GitHub repository](https://github.com/MaheshDoiphode/vscode-file-integrator/issues)! Contributions are welcome.
+Found a bug or have a feature request? Please open an issue on the [GitHub repository](https://github.com/MaheshDoiphode/codelens-ai/issues)! Contributions are welcome.
 
 ---
 
