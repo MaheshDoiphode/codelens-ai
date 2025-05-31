@@ -2,6 +2,9 @@
 
 Easily collect, organize, order, and format content from files, directories, **and other VS Code resources** within your editor! Perfect for creating context for LLMs, assembling documentation, sharing code snippets, **viewing scoped Git diffs**, or **copying directory structures**.
 
+![CodeLens AI in action](resources/demo.png)
+*CodeLens AI interface showing sessions with multiple files and directories*
+
 ## Why CodeLens AI? 🤔
 
 Tired of manually copying and pasting code, running separate `git diff` commands, or generating `tree` outputs? CodeLens AI streamlines these processes:
@@ -232,7 +235,7 @@ Prevent specific files/folders from appearing in the output of the **"Copy Direc
   - **🚀 Streamlined Structure:** Decreased from 167 files to just 19 files in the extension package.
   - **⏱️ Faster Loading:** All dependencies now bundled into a single minified JavaScript file.
   - **🧹 Cleaner Distribution:** Removed unnecessary development files from the published package.
-
+  - Update demo image
 ### 1.0.2
 
 -   **🎉 Project Renamed to CodeLens AI & Configuration Update!**
