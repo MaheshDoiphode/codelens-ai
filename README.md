@@ -27,10 +27,16 @@ Tired of manually copying and pasting code, running separate `git diff` commands
 -   **⚙️ Configurable Exclusions:**
     *   Define glob patterns (`fileintegrator.exclude`) to ignore unwanted files/folders during **drag-and-drop** from the Explorer.
     *   Define glob patterns (`fileintegrator.excludeFromTree`) to ignore items when using the **Copy Directory Structure** feature.
--   ⚡ **Per-Item Actions (Inline Icons):** Quickly perform actions directly on items using icons that appear on hover:
-    *   **Session:** `➕` (Add Active Editor), `🪟` (Add All Editors), `📄` (Generate), `📋` (Copy Content), `git-compare` (Generate Diff), `clippy` (Copy Diff), `🗑️` (Clear).
-    *   **Directory:** `📄` (Generate Content), `📋` (Copy Content), `git-compare` (Generate Diff), `clippy` (Copy Diff), `list-tree` (Copy Structure), `❌` (Remove).
-    *   **File:** `git-compare` (Generate Diff), `clippy` (Copy Diff), `❌` (Remove).
+-   ⚡ **Per-Item Actions:** Quickly perform actions directly on items:
+    *   **Inline Icons (Hover):**
+        *   **Session:** `➕` (Add Active Editor), `🪟` (Add All Editors), `📄` (Generate), `📋` (Copy Content), `🗑️` (Clear).
+        *   **Directory:** `📄` (Generate Content), `📋` (Copy Content), `list-tree` (Copy Structure), `❌` (Remove).
+        *   **File:** `❌` (Remove).
+    *   **Right-Click Context Menu:**
+        *   **Session:** Git Diff options, Undo Last Removal, Expand All Subdirectories, Copy Directory Structure, Rename, Remove Session.
+        *   **Directory/File:** Git Diff options, Remove Item.
+-   **🔄 Undo Functionality:** Easily restore recently removed files or directories using the "Undo Last Removal" option in the right-click menu.
+-   **📂 Directory Management:** Expand all subdirectories within a session using right-click menu options for better navigation.
 -   **📄 On-Demand Generation:** Create clean, editable documents for session content or Git diffs when needed.
 -   **📋 Easy Copying:** Copy formatted Markdown content, Git diffs, or directory structures to your clipboard with single clicks.
 -   **❌ Fine-Grained Removal:** Remove individual resources or directories (and their children) from a session easily via an inline icon.
@@ -83,35 +89,41 @@ Tired of manually copying and pasting code, running separate `git diff` commands
     *   **Open Item:** Single-click any file or resource item (non-directory) to open it in the editor.
     *   **Reorder:** Drag an item within the same level (Session root or inside a Directory) and drop it above/below another item to change the order used for content generation.
 
-5.  **Session Actions (Inline Icons on Hover):**
-    *   Hover over a **Session item** to see icons:
+5.  **Session Actions:**
+    *   **Inline Icons (Hover):**
         *   `➕` (Add Active Editor)
         *   `🪟` (Add All Open Editors)
         *   `📄` (Generate Code Block Document)
         *   `📋` (Copy Code Block Content)
-        *   `git-compare` (Generate Git Diff Document vs HEAD)
-        *   `clippy` (Copy Git Diff vs HEAD)
         *   `🗑️` (Clear Session - **Immediately** removes all items)
+    *   **Right-Click Context Menu:**
+        *   Generate Git Diff Document vs HEAD
+        *   Copy Git Diff vs HEAD
+        *   Undo Last Removal (restores recently removed files)        *   Expand All Subdirectories
+        *   Copy Directory Structure
+        *   Rename Session
+        *   Remove Session
 
-6.  **Resource Item Actions (Inline Icons on Hover):**
-    *   Hover over a **Directory item** (`resourceDirectory`):
+6.  **Resource Item Actions:**
+    *   **Directory Items (`resourceDirectory`) - Inline Icons (Hover):**
         *   `📄` (Generate Code Block for Directory Content)
         *   `📋` (Copy Code Block for Directory Content)
-        *   `git-compare` (Generate Git Diff Document for Directory vs HEAD)
-        *   `clippy` (Copy Git Diff for Directory vs HEAD)
         *   `list-tree` (Copy Directory Structure)
-        *   `❌` (Remove Directory and its children from session)
-    *   Hover over a **File item** (`resourceFile`):
-        *   `git-compare` (Generate Git Diff Document for File vs HEAD)
-        *   `clippy` (Copy Git Diff for File vs HEAD)
-        *   `❌` (Remove File from session)
+    *   **Directory Items - Right-Click Context Menu:**
+        *   Generate Git Diff Document for Directory vs HEAD
+        *   Copy Git Diff for Directory vs HEAD
+        *   Remove Directory and its children from session
+    *   **File Items (`resourceFile`) - Right-Click Context Menu:**
+        *   Generate Git Diff Document for File vs HEAD
+        *   Copy Git Diff for File vs HEAD
+        *   Remove File from session
 
-7.  **Other Item Actions (Context Menu):**
-    *   **Session:** Right-click for Rename, Remove, Copy Structure.
-    *   **Directory:** Right-click for Open Folder Location (if applicable).
-    *   **File:** Right-click for Open File Location.
+7.  **Advanced Directory Management:**
 
-8.  **Using Git Diff (`git-compare` / `clippy`):**
+    *   **Expand All Subdirectories:** Right-click on a session and select this option to expand all directories to show their full content (up to 3 levels deep as per VS Code limitations).
+    *   **Undo Last Removal:** Accidentally removed files or directories? Right-click on the session and select "Undo Last Removal" to restore the most recently removed items.
+
+8.  **Using Git Diff:**
     *   Requires the built-in `vscode.git` extension to be enabled.
     *   Operates on resources with the `file://` scheme that are tracked by Git.
     *   Compares the state of tracked files against `HEAD`.

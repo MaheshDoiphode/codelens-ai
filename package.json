@@ -2,7 +2,7 @@
   "name": "fileintegrator",
   "displayName": "File Integrator",
   "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence. Includes Git diff capabilities and directory structure copying.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "engines": {
     "vscode": "^1.97.0"
   },
@@ -186,6 +186,16 @@
         "command": "fileintegrator.copyDirectoryContentToClipboard",
         "title": "Copy Code Block (Directory)",
         "icon": "$(copy)"
+      },
+      {
+        "command": "fileintegrator.undoLastRemoval",
+        "title": "Undo Last Removal",
+        "icon": "$(arrow-left)"
+      },
+      {
+        "command": "fileintegrator.expandAllSubdirectories",
+        "title": "Expand All Subdirectories",
+        "icon": "$(expand-all)"
       }
     ],
     "viewsContainers": {
@@ -221,52 +231,62 @@
       "view/item/context": [
         {
           "command": "fileintegrator.addActiveEditorToSession",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@0"
         },
         {
           "command": "fileintegrator.addAllOpenEditorsToSession",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@0.5"
         },
         {
           "command": "fileintegrator.generateCodeBlock",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@1"
         },
         {
           "command": "fileintegrator.copyToClipboard",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@2"
         },
         {
-          "command": "fileintegrator.generateDiffDocument",
-          "when": "view == fileIntegratorView && viewItem == session",
-          "group": "inline@2.1"
-        },
-        {
-          "command": "fileintegrator.copyDiffToClipboard",
-          "when": "view == fileIntegratorView && viewItem == session",
-          "group": "inline@2.2"
-        },
-        {
           "command": "fileintegrator.clearSession",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@3"
         },
         {
+          "command": "fileintegrator.generateDiffDocument",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "group": "1_diff@1"
+        },
+        {
+          "command": "fileintegrator.copyDiffToClipboard",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "group": "1_diff@2"
+        },
+        {
+          "command": "fileintegrator.undoLastRemoval",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "group": "2_undo@1"
+        },
+        {
+          "command": "fileintegrator.expandAllSubdirectories",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "group": "3_expand_collapse@2"
+        },
+        {
           "command": "fileintegrator.copyDirectoryStructure",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "4_structure@1"
         },
         {
           "command": "fileintegrator.renameSession",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "5_modification@1"
         },
         {
           "command": "fileintegrator.removeSession",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "5_modification@2"
         },
         {
@@ -280,34 +300,39 @@
           "group": "inline@0.5"
         },
         {
-          "command": "fileintegrator.generateDirectoryDiffDocument",
+          "command": "fileintegrator.copyDirectoryStructure",
           "when": "view == fileIntegratorView && viewItem == resourceDirectory",
           "group": "inline@1"
         },
         {
-          "command": "fileintegrator.copyDirectoryDiffToClipboard",
+          "command": "fileintegrator.generateDirectoryDiffDocument",
           "when": "view == fileIntegratorView && viewItem == resourceDirectory",
-          "group": "inline@2"
+          "group": "1_diff@1"
         },
         {
-          "command": "fileintegrator.copyDirectoryStructure",
+          "command": "fileintegrator.copyDirectoryDiffToClipboard",
           "when": "view == fileIntegratorView && viewItem == resourceDirectory",
-          "group": "inline@3"
+          "group": "1_diff@2"
+        },
+        {
+          "command": "fileintegrator.removeItem",
+          "when": "view == fileIntegratorView && viewItem == resourceDirectory",
+          "group": "2_modification@1"
         },
         {
           "command": "fileintegrator.generateFileDiffDocument",
           "when": "view == fileIntegratorView && viewItem == resourceFile",
-          "group": "inline@2"
+          "group": "1_diff@1"
         },
         {
           "command": "fileintegrator.copyFileDiffToClipboard",
           "when": "view == fileIntegratorView && viewItem == resourceFile",
-          "group": "inline@3"
+          "group": "1_diff@2"
         },
         {
           "command": "fileintegrator.removeItem",
-          "when": "view == fileIntegratorView && (viewItem == resourceFile || viewItem == resourceDirectory)",
-          "group": "inline@4"
+          "when": "view == fileIntegratorView && viewItem == resourceFile",
+          "group": "2_modification@1"
         },
         {
           "command": "vscode.open",
