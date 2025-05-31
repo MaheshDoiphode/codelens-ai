@@ -190,7 +190,7 @@
       {
         "command": "fileintegrator.undoLastRemoval",
         "title": "Undo Last Removal",
-        "icon": "$(undo)"
+        "icon": "$(arrow-left)"
       }
     ],
     "viewsContainers": {
