@@ -42,6 +42,7 @@ const utils_1 = require("./utils");
 class SessionResourceStorage {
     _files = [];
     sessionId;
+    lastRemovedFiles = [];
     constructor(sessionId) {
         this.sessionId = sessionId;
     }
@@ -182,11 +183,15 @@ class SessionResourceStorage {
                 }
             });
         }
+        // Store removed files before filtering
+        this.lastRemovedFiles = this._files.filter(f => removedUris.has(f.uriString));
         this._files = this._files.filter(f => !removedUris.has(f.uriString));
         return this._files.length < initialLength;
     }
     clearFiles() {
         const count = this._files.length;
+        // Store cleared files for undo
+        this.lastRemovedFiles = [...this._files]; // Create a shallow copy
         this._files = [];
         return count;
     }
@@ -262,6 +267,20 @@ class SessionResourceStorage {
         this._files.splice(targetIndex, 0, ...draggedEntries);
         console.log(`[Storage:reorder] Reordering successful. New count: ${this._files.length}`);
         return true;
+    }
+    // Undo functionality
+    hasLastRemovedFiles() {
+        return this.lastRemovedFiles.length > 0;
+    }
+    undoLastRemoval() {
+        if (this.hasLastRemovedFiles()) {
+            const filesToRestore = this.lastRemovedFiles;
+            this._files = [...this._files, ...filesToRestore]; // Add them back to current files
+            this.lastRemovedFiles = []; // Clear the undo buffer
+            console.log(`[Storage:undo] Restored ${filesToRestore.length} items for session ${this.sessionId}`);
+            return filesToRestore;
+        }
+        return undefined;
     }
 }
 exports.SessionResourceStorage = SessionResourceStorage;

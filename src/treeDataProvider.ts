@@ -17,6 +17,35 @@ export class FileIntegratorProvider implements vscode.TreeDataProvider<Integrato
 
     getTreeItem(element: IntegratorTreeItem): vscode.TreeItem { return element; }
 
+    getParent(element: IntegratorTreeItem): vscode.ProviderResult<IntegratorTreeItem> {
+        if (element instanceof ResourceItem) {
+            const session = this.sessionManager.getSession(element.sessionId);
+            if (!session) return undefined;
+            
+            // If this resource has a parent URI, find the parent ResourceItem
+            if (element.entry.parentUriString) {
+                const parentEntry = session.storage.findEntry(element.entry.parentUriString);
+                if (parentEntry) {
+                    return new ResourceItem(parentEntry, 
+                        parentEntry.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+                    );
+                }
+            }
+            
+            // If no parent URI, the parent is the session
+            return new SessionItem(session,
+                session.storage.files.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None
+            );
+        }
+        
+        // SessionItems have no parent (they are at the root level)
+        if (element instanceof SessionItem) {
+            return undefined;
+        }
+        
+        return undefined;
+    }
+
     getChildren(element?: IntegratorTreeItem): vscode.ProviderResult<IntegratorTreeItem[]> {
         if (!element) { // Root level: Show Sessions
             return Promise.resolve(this.sessionManager.getAllSessions().map(s => new SessionItem(s,
@@ -46,6 +75,27 @@ export class FileIntegratorProvider implements vscode.TreeDataProvider<Integrato
     }
 
     refresh(element?: IntegratorTreeItem): void { this._onDidChangeTreeData.fire(element); }
+
+    /**
+     * Finds a specific tree item by its URI string and session ID.
+     * This is a utility for revealing items after operations like undo.
+     */
+    findTreeItem(uriString: string, sessionId: string): IntegratorTreeItem | undefined {
+        const session = this.sessionManager.getSession(sessionId);
+        if (!session) return undefined;
+
+        const entry = session.storage.findEntry(uriString);
+        if (entry) {
+            return new ResourceItem(entry, entry.isDirectory ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
+        }
+
+        // If looking for a session item itself (e.g., if session is target for undo)
+        if (session.id === sessionId && !uriString) { // uriString would be empty if looking for session itself
+             return new SessionItem(session, session.storage.files.length > 0 ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None);
+        }
+
+        return undefined;
+    }
 
     // --- Drag and Drop Implementation ---
 
@@ -235,4 +285,4 @@ export class FileIntegratorProvider implements vscode.TreeDataProvider<Integrato
             console.log('[handleDrop] No supported data transfer item found.');
         }
     }
-} 
+}

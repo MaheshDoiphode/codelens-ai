@@ -186,6 +186,11 @@
         "command": "fileintegrator.copyDirectoryContentToClipboard",
         "title": "Copy Code Block (Directory)",
         "icon": "$(copy)"
+      },
+      {
+        "command": "fileintegrator.undoLastRemoval",
+        "title": "Undo Last Removal",
+        "icon": "$(undo)"
       }
     ],
     "viewsContainers": {
@@ -221,52 +226,57 @@
       "view/item/context": [
         {
           "command": "fileintegrator.addActiveEditorToSession",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@0"
         },
         {
           "command": "fileintegrator.addAllOpenEditorsToSession",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@0.5"
         },
         {
           "command": "fileintegrator.generateCodeBlock",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@1"
         },
         {
           "command": "fileintegrator.copyToClipboard",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@2"
         },
         {
           "command": "fileintegrator.generateDiffDocument",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@2.1"
         },
         {
           "command": "fileintegrator.copyDiffToClipboard",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@2.2"
         },
         {
+          "command": "fileintegrator.undoLastRemoval",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
+          "group": "inline@2.3"
+        },
+        {
           "command": "fileintegrator.clearSession",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "inline@3"
         },
         {
           "command": "fileintegrator.copyDirectoryStructure",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "4_structure@1"
         },
         {
           "command": "fileintegrator.renameSession",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "5_modification@1"
         },
         {
           "command": "fileintegrator.removeSession",
-          "when": "view == fileIntegratorView && viewItem == session",
+          "when": "view == fileIntegratorView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "5_modification@2"
         },
         {

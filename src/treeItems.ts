@@ -6,14 +6,17 @@ import { getDisplayUri } from './utils';
 // --- Tree View Items ---
 export type IntegratorTreeItem = SessionItem | ResourceItem;
 
-export class SessionItem extends vscode.TreeItem {
-    constructor(
+export class SessionItem extends vscode.TreeItem {    constructor(
         public readonly session: Session,
         collapsibleState: vscode.TreeItemCollapsibleState = vscode.TreeItemCollapsibleState.Collapsed
     ) {
         super(session.name, collapsibleState);
         this.id = session.id; // Use session ID as the tree item ID
-        this.contextValue = 'session'; // Used for menu filtering
+        
+        // Set contextValue based on whether session has files to undo
+        const hasUndoableFiles = session.storage.hasLastRemovedFiles();
+        this.contextValue = hasUndoableFiles ? 'sessionWithUndo' : 'session'; // Used for menu filtering
+        
         this.iconPath = new vscode.ThemeIcon('folder-library'); // Or 'briefcase' or 'database'
         this.tooltip = `Session: ${session.name}`;
         // Show item count in description

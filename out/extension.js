@@ -218,12 +218,46 @@ function registerCommands(context) {
             sessionManager.persistSessions();
             await (0, utils_1.updateCodeBlockDocument)(s); // Update associated doc
             fileIntegratorProvider.refresh();
+            vscode.window.showInformationMessage(`Removed "${(0, utils_1.getDisplayUri)(item.uriString, 'treeDescription')}". You can undo this by clicking 'Undo Last Removal' in the tree view.`);
         }
         else {
             fileIntegratorProvider.refresh();
         }
     });
     register('fileintegrator.refreshView', () => fileIntegratorProvider.refresh());
+    // NEW: Undo Last Removal Command
+    register('fileintegrator.undoLastRemoval', async (item) => {
+        const s = item?.session ?? await (0, utils_1.selectSession)('Select session to undo last removal for', sessionManager);
+        if (!s)
+            return;
+        if (!s.storage.hasLastRemovedFiles()) {
+            vscode.window.showInformationMessage(`No recent removals to undo for session "${s.name}".`);
+            return;
+        }
+        const restored = s.storage.undoLastRemoval();
+        if (restored && restored.length > 0) {
+            sessionManager.persistSessions();
+            await (0, utils_1.updateCodeBlockDocument)(s); // Update associated doc
+            fileIntegratorProvider.refresh();
+            vscode.window.showInformationMessage(`Successfully restored ${restored.length} item(s) to session "${s.name}".`);
+            // Optionally reveal the first restored item (with error handling)
+            try {
+                if (restored.length > 0) {
+                    const restoredItem = fileIntegratorProvider.findTreeItem(restored[0].uriString, s.id);
+                    if (restoredItem) {
+                        await treeView.reveal(restoredItem, { select: true, focus: false, expand: true });
+                    }
+                }
+            }
+            catch (revealError) {
+                // Silently handle reveal errors since the main operation (undo) was successful
+                console.log('Could not reveal restored item, but undo was successful:', revealError);
+            }
+        }
+        else {
+            vscode.window.showWarningMessage(`Failed to undo last removal for session "${s.name}".`);
+        }
+    });
     // --- Existing Adding Items ---
     register('fileintegrator.addActiveEditorToSession', async (item) => {
         const targetSession = item?.session ?? await (0, utils_1.selectSession)("Select session to add active editor to", sessionManager);

@@ -43,7 +43,9 @@ class SessionItem extends vscode.TreeItem {
         super(session.name, collapsibleState);
         this.session = session;
         this.id = session.id; // Use session ID as the tree item ID
-        this.contextValue = 'session'; // Used for menu filtering
+        // Set contextValue based on whether session has files to undo
+        const hasUndoableFiles = session.storage.hasLastRemovedFiles();
+        this.contextValue = hasUndoableFiles ? 'sessionWithUndo' : 'session'; // Used for menu filtering
         this.iconPath = new vscode.ThemeIcon('folder-library'); // Or 'briefcase' or 'database'
         this.tooltip = `Session: ${session.name}`;
         // Show item count in description

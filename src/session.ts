@@ -19,6 +19,7 @@ export interface PersistedSession { id: string; name: string; files: PersistedFi
 export class SessionResourceStorage {
     private _files: FileEntry[] = [];
     public readonly sessionId: string;
+    private lastRemovedFiles: FileEntry[] = [];
 
     constructor(sessionId: string) {
         this.sessionId = sessionId;
@@ -168,12 +169,16 @@ export class SessionResourceStorage {
                 }
             });
         }
+        // Store removed files before filtering
+        this.lastRemovedFiles = this._files.filter(f => removedUris.has(f.uriString));
 
         this._files = this._files.filter(f => !removedUris.has(f.uriString));
         return this._files.length < initialLength;
     }
     clearFiles(): number {
         const count = this._files.length;
+        // Store cleared files for undo
+        this.lastRemovedFiles = [...this._files]; // Create a shallow copy
         this._files = [];
         return count;
     }
@@ -252,6 +257,22 @@ export class SessionResourceStorage {
         this._files.splice(targetIndex, 0, ...draggedEntries);
         console.log(`[Storage:reorder] Reordering successful. New count: ${this._files.length}`);
         return true;
+    }
+
+    // Undo functionality
+    hasLastRemovedFiles(): boolean {
+        return this.lastRemovedFiles.length > 0;
+    }
+
+    undoLastRemoval(): FileEntry[] | undefined {
+        if (this.hasLastRemovedFiles()) {
+            const filesToRestore = this.lastRemovedFiles;
+            this._files = [...this._files, ...filesToRestore]; // Add them back to current files
+            this.lastRemovedFiles = []; // Clear the undo buffer
+            console.log(`[Storage:undo] Restored ${filesToRestore.length} items for session ${this.sessionId}`);
+            return filesToRestore;
+        }
+        return undefined;
     }
 }
 export class Session {
