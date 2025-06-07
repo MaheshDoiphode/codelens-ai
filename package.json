@@ -2,8 +2,8 @@
   "name": "codelens-ai",
   "displayName": "CodeLens AI",
   "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence. Includes Git diff capabilities and directory structure copying.",
-  "version": "1.0.3",
-  "publisher": "MaheshDoiphode",
+  "version": "1.0.4",
+  "publisher": "codelens-ai",
   "license": "MIT",
   "engines": {
     "vscode": "^1.97.0"
@@ -222,6 +222,26 @@
         "command": "codelensai.expandAllSubdirectories",
         "title": "Expand All Subdirectories",
         "icon": "$(fold-down)"
+      },
+      {
+        "command": "codelensai.humanRelay",
+        "title": "Human Relay",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "codelensai.addProfile",
+        "title": "Add Profile",
+        "icon": "$(add)"
+      },
+      {
+        "command": "codelensai.removeProfile",
+        "title": "Remove Profile",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "codelensai.editProfile",
+        "title": "Edit Profile",
+        "icon": "$(edit)"
       }
     ],
     "viewsContainers": {
@@ -314,6 +334,11 @@
           "command": "codelensai.removeSession",
           "when": "view == codeLensAiView && (viewItem == session || viewItem == sessionWithUndo)",
           "group": "5_modification@2"
+        },
+        {
+          "command": "codelensai.humanRelay",
+          "when": "view == codeLensAiView && viewItem == session",
+          "group": "6_relay@1"
         },
         {
           "command": "codelensai.generateDirectoryCodeBlock",

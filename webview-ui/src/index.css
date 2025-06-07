@@ -1,0 +1,22 @@
+.human-relay-dialog {
+  padding: 1rem;
+  background-color: var(--vscode-editor-background);
+  color: var(--vscode-editor-foreground);
+}
+
+.human-relay-dialog h2 {
+  margin-top: 0;
+}
+
+.human-relay-dialog textarea {
+  width: 100%;
+  margin: 0.5rem 0;
+  min-height: 100px;
+  background-color: var(--vscode-input-background);
+  color: var(--vscode-input-foreground);
+  border: 1px solid var(--vscode-input-border);
+}
+
+.human-relay-dialog button {
+  margin-right: 0.5rem;
+}

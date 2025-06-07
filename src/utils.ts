@@ -8,6 +8,12 @@ import { SessionManager } from './sessionManager';
  * Checks if a file system path matches drag & drop exclusion patterns.
  * Uses `codelensai.exclude` setting.
  */
+function addLineNumbers(content: string): string {
+    const lines = content.split('\n');
+    const maxDigits = String(lines.length).length;
+    return lines.map((line, index) => `${String(index + 1).padStart(maxDigits, ' ')} | ${line}`).join('\n');
+}
+
 export function isPathExcluded(filePath: string): boolean {
     const config = vscode.workspace.getConfiguration('codelensai');
     const excludePatterns = config.get<Record<string, boolean>>('exclude');
@@ -118,7 +124,7 @@ export async function generateMarkdownContentForEntries(entries: readonly FileEn
         const ext = path.extname(langPart);
         const lang = ext ? ext.substring(1) : '';
 
-        content += `<file path="${displayUri}">\n${resourceContent ?? '--- Content Unavailable ---\n'}\n</file>\n\n`;
+        content += `<file path="${displayUri}">\n${addLineNumbers(resourceContent ?? '--- Content Unavailable ---\n')}\n</file>\n\n`;
     }
     return content.trimEnd();
 }

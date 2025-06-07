@@ -12,9 +12,13 @@ import { IntegratorTreeItem, SessionItem, ResourceItem } from './treeItems';
 import { CodeLensAiProvider  as CodeLensAiProvider } from './treeDataProvider'; // Renaming class for clarity here
 import { isPathExcludedFromTree, selectSession, generateMarkdownContentForEntries, generateMarkdownContent, showCodeBlockDocument, updateCodeBlockDocument, getDisplayUri, getDescendantEntries, buildStructureStringRecursive } from './utils'; // createNewAssociatedDocument, getDisplayPath, isPathExcluded not directly used here
 import { generateDiffCommon } from './git'; // calculateDiffForEntries not directly used here
+import { HumanRelayHandler, handleHumanRelayResponse } from './humanRelay';
+import { HumanRelayViewProvider } from './HumanRelayViewProvider';
+import { ProfileManager, Profile } from './profiles';
 
 // --- Global Variables & Activation ---
 let sessionManager: SessionManager;
+let profileManager: ProfileManager;
 let codeLensAiProvider: CodeLensAiProvider;
 let treeView: vscode.TreeView<IntegratorTreeItem>;
 let gitAPI: GitAPI | undefined;
@@ -50,6 +54,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     sessionManager = new SessionManager(context);
+    profileManager = new ProfileManager(context);
     sessionManager.loadSessions();
 
     codeLensAiProvider = new CodeLensAiProvider(sessionManager);
@@ -61,6 +66,8 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(treeView);
 
     registerCommands(context);
+
+    // The HumanRelayViewProvider is now created on a per-session basis, so we don't register it here.
 
     context.subscriptions.push({ dispose: () => sessionManager.dispose() });
 
@@ -78,6 +85,86 @@ function registerCommands(context: vscode.ExtensionContext) {
     register('codelensai.addSession', async () => {
         const n = await vscode.window.showInputBox({ prompt: "Enter new session name", value: `Session ${sessionManager.getAllSessions().length + 1}` });
         if (n?.trim()) { const s = sessionManager.createSession(n.trim()); codeLensAiProvider.refresh(); await treeView.reveal(new SessionItem(s), { select: true, focus: true, expand: true }); }
+    });
+
+    register('codelensai.humanRelay', async (item?: SessionItem) => {
+        const session = item?.session ?? await selectSession('Select session for Human Relay', sessionManager);
+        if (!session) return;
+
+        const profiles = await profileManager.getProfiles();
+        const profileNames = profiles.map(p => p.name);
+        const selectedProfileName = await vscode.window.showQuickPick(['None', ...profileNames], { placeHolder: 'Select a profile to use' });
+
+        let instructions = '';
+        if (selectedProfileName && selectedProfileName !== 'None') {
+            const selectedProfile = profiles.find(p => p.name === selectedProfileName);
+            if (selectedProfile) {
+                instructions = selectedProfile.instructions;
+            }
+        }
+
+        const provider = new HumanRelayViewProvider(context.extensionUri, session);
+
+        const registration = vscode.window.registerWebviewViewProvider(HumanRelayViewProvider.viewType, provider);
+        context.subscriptions.push(registration);
+
+        const humanRelayHandler = new HumanRelayHandler();
+        try {
+            const prompt = await vscode.window.showInputBox({ prompt: "Enter the prompt for the AI" });
+            if (prompt) {
+                const fullPrompt = `${instructions}\n\n${prompt}`;
+                await humanRelayHandler.completePrompt(fullPrompt).then(response => {
+                    if (response) {
+                        // Find the human relay view and show it
+                        vscode.commands.executeCommand('workbench.view.extension.codelens-ai-activitybar').then(() => {
+                            provider.show(fullPrompt);
+                        });
+                    }
+                });
+            }
+        } catch (error) {
+            vscode.window.showErrorMessage(`Human Relay Error: ${error}`);
+        }
+    });
+
+    register('codelensai.addProfile', async () => {
+        const name = await vscode.window.showInputBox({ prompt: 'Enter profile name' });
+        if (name) {
+            const instructions = await vscode.window.showInputBox({ prompt: 'Enter instructions' });
+            if (instructions) {
+                await profileManager.addProfile({ name, instructions });
+                vscode.window.showInformationMessage(`Profile "${name}" added.`);
+            }
+        }
+    });
+
+    register('codelensai.removeProfile', async () => {
+        const profiles = await profileManager.getProfiles();
+        const profileNames = profiles.map(p => p.name);
+        const selectedProfileName = await vscode.window.showQuickPick(profileNames, { placeHolder: 'Select a profile to remove' });
+        if (selectedProfileName) {
+            await profileManager.removeProfile(selectedProfileName);
+            vscode.window.showInformationMessage(`Profile "${selectedProfileName}" removed.`);
+        }
+    });
+
+    register('codelensai.editProfile', async () => {
+        const profiles = await profileManager.getProfiles();
+        const profileNames = profiles.map(p => p.name);
+        const selectedProfileName = await vscode.window.showQuickPick(profileNames, { placeHolder: 'Select a profile to edit' });
+        if (selectedProfileName) {
+            const selectedProfile = profiles.find(p => p.name === selectedProfileName);
+            if (selectedProfile) {
+                const name = await vscode.window.showInputBox({ prompt: 'Enter new profile name', value: selectedProfile.name });
+                if (name) {
+                    const instructions = await vscode.window.showInputBox({ prompt: 'Enter new instructions', value: selectedProfile.instructions });
+                    if (instructions) {
+                        await profileManager.updateProfile(selectedProfileName, { name, instructions });
+                        vscode.window.showInformationMessage(`Profile "${selectedProfileName}" updated.`);
+                    }
+                }
+            }
+        }
     });
     register('codelensai.removeSession', async (item?: SessionItem) => {
         const s = item?.session ?? await selectSession('Select session to remove', sessionManager);
