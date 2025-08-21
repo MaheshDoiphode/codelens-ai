@@ -3,7 +3,7 @@
   "displayName": "CodeLens AI",
   "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence. Includes Git diff capabilities and directory structure copying.",
   "version": "1.1.0",
-  "publisher": "mahesh-org",
+  "publisher": "codelens-ai",
   "license": "MIT",
   "engines": {
     "vscode": "^1.97.0"
