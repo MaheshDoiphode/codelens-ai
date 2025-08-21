@@ -142,6 +142,18 @@ function registerCommands(context: vscode.ExtensionContext) {
         } else { vscode.window.showWarningMessage("No code block content generated or found to copy."); }
     });
 
+    // Toggle line numbers in generated output
+    register('codelensai.toggleLineNumbers', async () => {
+        const cfg = vscode.workspace.getConfiguration('codelensai');
+        const current = cfg.get<boolean>('numberLines', false) === true;
+        await cfg.update('numberLines', !current, vscode.ConfigurationTarget.Global);
+        // Refresh all open session documents to reflect the change
+        for (const s of sessionManager.getAllSessions()) {
+            await updateCodeBlockDocument(s);
+        }
+        vscode.window.showInformationMessage(`CodeLens AI: Line numbers ${!current ? 'enabled' : 'disabled'} for generated content.`);
+    });
+
     register('codelensai.generateDirectoryCodeBlock', async (item: ResourceItem) => {
         if (!(item instanceof ResourceItem) || !item.isDirectory) return;
         const session = sessionManager.getSession(item.sessionId);
@@ -587,6 +599,15 @@ function registerCommands(context: vscode.ExtensionContext) {
             vscode.window.showWarningMessage(`Some directories could not be expanded in session "${s.name}".`);
         }
     });
+
+    // React to configuration changes (e.g., manual toggle via settings UI)
+    context.subscriptions.push(vscode.workspace.onDidChangeConfiguration(async (e) => {
+        if (e.affectsConfiguration('codelensai.numberLines')) {
+            for (const s of sessionManager.getAllSessions()) {
+                await updateCodeBlockDocument(s);
+            }
+        }
+    }));
 }
 
 /**

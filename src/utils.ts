@@ -95,6 +95,9 @@ export async function generateMarkdownContentForEntries(entries: readonly FileEn
     }
     // console.log(`[CodeLensAI:MarkdownGenEntries] Generating content for ${resourceEntries.length} resources.`);
 
+    const cfg = vscode.workspace.getConfiguration('codelensai');
+    const addLineNumbers = cfg.get<boolean>('numberLines', false) === true;
+
     for (const entry of resourceEntries) {
         let resourceContent: string | null = entry.content;
 
@@ -113,16 +116,21 @@ export async function generateMarkdownContentForEntries(entries: readonly FileEn
             }
         }
         const displayUri = getDisplayUri(entry.uriString, 'markdownHeader');
-        const uriPath = vscode.Uri.parse(entry.uriString).path;
-        const langPart = uriPath.includes('!/') ? uriPath.substring(uriPath.lastIndexOf('!/') + 1) : uriPath;
-        const ext = path.extname(langPart);
-        const lang = ext ? ext.substring(1) : '';
 
-        content += `<file path="${displayUri}">\n${resourceContent ?? '--- Content Unavailable ---\n'}\n</file>\n\n`;
+        let body = resourceContent ?? '--- Content Unavailable ---\n';
+        if (addLineNumbers && resourceContent !== null) {
+            const lines = body.split(/\r?\n/);
+            const lastIsEmpty = lines.length > 0 && lines[lines.length - 1] === '';
+            const effectiveLines = lastIsEmpty ? lines.slice(0, -1) : lines;
+            const width = String(Math.max(1, effectiveLines.length)).length;
+            const numbered = effectiveLines.map((ln, idx) => `${String(idx + 1).padStart(width, ' ')}: ${ln}`);
+            body = numbered.join('\n') + (lastIsEmpty ? '\n' : '');
+        }
+
+        content += `<file path="${displayUri}">\n${body}\n</file>\n\n`;
     }
     return content.trimEnd();
 }
-
 
 /** Generates aggregated Markdown content for a *whole session*, respecting order. */
 export async function generateMarkdownContent(session: Session): Promise<string> {

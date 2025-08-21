@@ -146,6 +146,11 @@
             "type": "boolean",
             "description": "Set true to exclude matching relative paths from the structure output."
           }
+        },
+        "codelensai.numberLines": {
+          "type": "boolean",
+          "default": false,
+          "description": "If enabled, each line of file content in generated session code blocks will be prefixed with its line number (1-based)."
         }
       }
     },
@@ -264,6 +269,12 @@
         "command": "codelensai.addSelectionToSession",
         "title": "Select Session",
         "icon": "$(add)"
+      },
+      {
+        "command": "codelensai.toggleLineNumbers",
+        "title": "Toggle Line Numbers",
+        "category": "CodeLens AI",
+        "icon": "$(list-ordered)"
       }
     ],
     "viewsContainers": {
@@ -300,6 +311,12 @@
           "command": "codelensai.refreshView",
           "when": "view == codeLensAiView",
           "group": "navigation@2"
+        },
+        {
+          "command": "codelensai.toggleLineNumbers",
+          "when": "view == codeLensAiView",
+          "group": "navigation@3",
+          "toggled": "config.codelensai.numberLines"
         }
       ],
       "view/item/context": [
