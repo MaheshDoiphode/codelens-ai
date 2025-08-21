@@ -1,6 +1,15 @@
 ## Release Notes
 
-### 1.0.3 (Latest)
+### 1.1.0 (Latest)
+
+-   ✨ Feature: Optional Line Numbers in Generated Content
+    *   New setting `codelensai.numberLines` (default: false) to prefix each line of generated session code blocks with its 1-based line number.
+    *   Added a view title action "Toggle Line Numbers" that reflects the current state and updates all open session documents immediately.
+    *   Configuration changes to this setting trigger an automatic refresh of associated documents.
+
+![Right-click: Add to CodeLens](resources/add-to-codelens.png)
+
+### 1.0.3
 
 - **⚡ Performance: Extension Optimization & Bundling!**
   - Implemented webpack bundling for significantly improved performance and faster load times.
@@ -8,7 +17,8 @@
   - **🚀 Streamlined Structure:** Decreased from 167 files to just 19 files in the extension package.
   - **⏱️ Faster Loading:** All dependencies now bundled into a single minified JavaScript file.
   - **🧹 Cleaner Distribution:** Removed unnecessary development files from the published package.
-### 1.0.2 (Latest)
+
+### 1.0.2
 
 -   **🎉 Project Renamed to CodeLens AI & Configuration Update!**
     *   "File Integrator" is now **CodeLens AI**, better reflecting its role in AI-assisted development.

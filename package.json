@@ -2,8 +2,8 @@
   "name": "codelens-ai",
   "displayName": "CodeLens AI",
   "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence. Includes Git diff capabilities and directory structure copying.",
-  "version": "1.0.3",
-  "publisher": "MaheshDoiphode",
+  "version": "1.1.0",
+  "publisher": "mahesh-org",
   "license": "MIT",
   "engines": {
     "vscode": "^1.97.0"
@@ -40,6 +40,8 @@
     "theme": "dark"
   },
   "main": "./out/extension.js",
+  "activationEvents": [
+  ],
   "dependencies": {
     "fs-extra": "^11.2.0",
     "minimatch": "^9.0.5",
@@ -63,6 +65,12 @@
     "webpack-cli": "^6.0.1"
   },
   "contributes": {
+    "submenus": [
+      {
+        "id": "codelensai.explorerSubmenu",
+        "label": "CodeLens"
+      }
+    ],
     "configuration": {
       "title": "CodeLens AI",
       "properties": {
@@ -114,6 +122,11 @@
             "type": "boolean",
             "description": "Set true to exclude matching relative paths from the structure output."
           }
+        },
+        "codelensai.numberLines": {
+          "type": "boolean",
+          "default": false,
+          "description": "If enabled, each line of file content in generated session code blocks will be prefixed with its line number (1-based)."
         }
       }
     },
@@ -222,6 +235,22 @@
         "command": "codelensai.expandAllSubdirectories",
         "title": "Expand All Subdirectories",
         "icon": "$(fold-down)"
+      },
+      {
+        "command": "codelensai.addFolderToSession",
+        "title": "Add to Session (Folder)...",
+        "icon": "$(add)"
+      },
+      {
+        "command": "codelensai.addSelectionToSession",
+        "title": "Select Session",
+        "icon": "$(add)"
+      },
+      {
+        "command": "codelensai.toggleLineNumbers",
+        "title": "Toggle Line Numbers",
+        "category": "CodeLens AI",
+        "icon": "$(list-ordered)"
       }
     ],
     "viewsContainers": {
@@ -233,15 +262,21 @@
         }
       ]
     },
-    "views": {
-      "codelens-ai-activitybar": [
-        {
-          "id": "codeLensAiView",
-          "name": "CodeLens AI Sessions"
-        }
-      ]
-    },
     "menus": {
+      "explorer/context": [
+        {
+          "submenu": "codelensai.explorerSubmenu",
+          "when": "resourceScheme == file",
+          "group": "navigation@99"
+        }
+      ],
+      "codelensai.explorerSubmenu": [
+        {
+          "command": "codelensai.addSelectionToSession",
+          "when": "resourceScheme == file",
+          "group": "1_select@1"
+        }
+      ],
       "view/title": [
         {
           "command": "codelensai.addSession",
@@ -252,6 +287,12 @@
           "command": "codelensai.refreshView",
           "when": "view == codeLensAiView",
           "group": "navigation@2"
+        },
+        {
+          "command": "codelensai.toggleLineNumbers",
+          "when": "view == codeLensAiView",
+          "group": "navigation@3",
+          "toggled": "config.codelensai.numberLines"
         }
       ],
       "view/item/context": [
@@ -369,6 +410,14 @@
           "command": "codelensai.removeItem",
           "when": "view == codeLensAiView && viewItem == resourceFile",
           "group": "inline@0"
+        }
+      ]
+    },
+    "views": {
+      "codelens-ai-activitybar": [
+        {
+          "id": "codeLensAiView",
+          "name": "CodeLens AI Sessions"
         }
       ]
     }
