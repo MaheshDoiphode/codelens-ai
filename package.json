@@ -2,7 +2,7 @@
   "name": "codelens-ai",
   "displayName": "CodeLens AI",
   "description": "Integrates content from multiple files, directories, and VS Code resources via sessions with persistence. Includes Git diff capabilities and directory structure copying.",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "publisher": "MaheshDoiphode",
   "license": "MIT",
   "engines": {
@@ -40,6 +40,32 @@
     "theme": "dark"
   },
   "main": "./out/extension.js",
+  "activationEvents": [
+    "onView:codeLensAiView",
+    "onCommand:codelensai.addSession",
+    "onCommand:codelensai.removeSession",
+    "onCommand:codelensai.renameSession",
+    "onCommand:codelensai.clearSession",
+    "onCommand:codelensai.generateCodeBlock",
+    "onCommand:codelensai.copyToClipboard",
+    "onCommand:codelensai.removeItem",
+    "onCommand:codelensai.refreshView",
+    "onCommand:codelensai.addActiveEditorToSession",
+    "onCommand:codelensai.addAllOpenEditorsToSession",
+    "onCommand:codelensai.generateDiffDocument",
+    "onCommand:codelensai.copyDiffToClipboard",
+    "onCommand:codelensai.generateDirectoryDiffDocument",
+    "onCommand:codelensai.copyDirectoryDiffToClipboard",
+    "onCommand:codelensai.generateFileDiffDocument",
+    "onCommand:codelensai.copyFileDiffToClipboard",
+    "onCommand:codelensai.copyDirectoryStructure",
+    "onCommand:codelensai.generateDirectoryCodeBlock",
+    "onCommand:codelensai.copyDirectoryContentToClipboard",
+    "onCommand:codelensai.undoLastRemoval",
+    "onCommand:codelensai.expandAllSubdirectories",
+    "onCommand:codelensai.addFolderToSession",
+    "onCommand:codelensai.addSelectionToSession"
+  ],
   "dependencies": {
     "fs-extra": "^11.2.0",
     "minimatch": "^9.0.5",
@@ -63,6 +89,12 @@
     "webpack-cli": "^6.0.1"
   },
   "contributes": {
+    "submenus": [
+      {
+        "id": "codelensai.explorerSubmenu",
+        "label": "CodeLens AI"
+      }
+    ],
     "configuration": {
       "title": "CodeLens AI",
       "properties": {
@@ -222,6 +254,16 @@
         "command": "codelensai.expandAllSubdirectories",
         "title": "Expand All Subdirectories",
         "icon": "$(fold-down)"
+      },
+      {
+        "command": "codelensai.addFolderToSession",
+        "title": "Add to Session (Folder)...",
+        "icon": "$(add)"
+      },
+      {
+        "command": "codelensai.addSelectionToSession",
+        "title": "Add to Session (Selection)...",
+        "icon": "$(add)"
       }
     ],
     "viewsContainers": {
@@ -233,15 +275,26 @@
         }
       ]
     },
-    "views": {
-      "codelens-ai-activitybar": [
-        {
-          "id": "codeLensAiView",
-          "name": "CodeLens AI Sessions"
-        }
-      ]
-    },
     "menus": {
+      "explorer/context": [
+        {
+          "submenu": "codelensai.explorerSubmenu",
+          "when": "resourceScheme == file",
+          "group": "navigation@99"
+        },
+        {
+          "command": "codelensai.addFolderToSession",
+          "when": "explorerResourceIsFolder && resourceScheme == file",
+          "group": "navigation@100"
+        }
+      ],
+      "codelensai.explorerSubmenu": [
+        {
+          "command": "codelensai.addSelectionToSession",
+          "when": "resourceScheme == file",
+          "group": "1_add@1"
+        }
+      ],
       "view/title": [
         {
           "command": "codelensai.addSession",
@@ -369,6 +422,14 @@
           "command": "codelensai.removeItem",
           "when": "view == codeLensAiView && viewItem == resourceFile",
           "group": "inline@0"
+        }
+      ]
+    },
+    "views": {
+      "codelens-ai-activitybar": [
+        {
+          "id": "codeLensAiView",
+          "name": "CodeLens AI Sessions"
         }
       ]
     }

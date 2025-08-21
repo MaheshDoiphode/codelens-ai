@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
-// import * as fs from 'fs-extra'; // Not directly used in this file after refactoring
+import * as fs from 'fs-extra'; // Used for folder checks in Explorer command
 
 // Import Git API Types
 import { GitExtension, API as GitAPI } from './api/git'; // Repository, Change, Change were not directly used here
@@ -207,6 +207,154 @@ function registerCommands(context: vscode.ExtensionContext) {
     register('codelensai.addAllOpenEditorsToSession', async (item?: SessionItem) => {
         const session = item?.session ?? await selectSession("Select session to add all open editors to", sessionManager);
         if (session) await addAllOpenEditorsLogic(session);
+    });
+
+    // Add folders from Explorer to a session (supports multi-select)
+    register('codelensai.addFolderToSession', async (clickedUri?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+        // Determine the target session first
+        const targetSession = await selectSession('Select session to add folder(s) to', sessionManager);
+        if (!targetSession) return;
+
+        // Gather selected URIs (multi-select supported by Explorer passes array as 2nd arg)
+        const candidates: vscode.Uri[] = Array.isArray(selectedUris) && selectedUris.length > 0
+            ? selectedUris
+            : (clickedUri ? [clickedUri] : []);
+
+        if (candidates.length === 0) {
+            vscode.window.showInformationMessage('No folder selected.');
+            return;
+        }
+
+        // Normalize and filter to unique file-scheme URIs that are directories
+        const uniqueByFsPath = new Map<string, vscode.Uri>();
+        for (const u of candidates) {
+            if (u.scheme !== 'file') continue;
+            uniqueByFsPath.set(u.fsPath, u);
+        }
+        const folderUris = Array.from(uniqueByFsPath.values());
+        if (folderUris.length === 0) {
+            vscode.window.showInformationMessage('Only local folders can be added.');
+            return;
+        }
+
+        let rootsAttempted = 0;
+        let rootsAdded = 0;
+
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: `CodeLens AI: Adding folder(s) to session "${targetSession.name}"...`,
+            cancellable: true
+        }, async (progress, token) => {
+            for (let i = 0; i < folderUris.length; i++) {
+                if (token.isCancellationRequested) break;
+                const folderUri = folderUris[i];
+                try {
+                    const stat = await fs.lstat(folderUri.fsPath);
+                    if (!stat.isDirectory()) {
+                        continue; // skip files if somehow passed
+                    }
+                } catch {
+                    continue;
+                }
+
+                rootsAttempted++;
+                const name = path.basename(folderUri.fsPath);
+                progress.report({ message: `(${i + 1}/${folderUris.length}) ${name}` });
+
+                try {
+                    const added = await targetSession.storage.addResource(folderUri);
+                    if (added) {
+                        rootsAdded++;
+                    }
+                } catch (err: any) {
+                    console.error('[CodeLensAI:addFolderToSession] Error adding folder', folderUri.fsPath, err);
+                }
+            }
+        });
+
+        if (rootsAdded > 0) {
+            sessionManager.persistSessions();
+            await updateCodeBlockDocument(targetSession);
+            codeLensAiProvider.refresh();
+            vscode.window.showInformationMessage(`Added ${rootsAdded}/${rootsAttempted} folder(s) to session "${targetSession.name}".`);
+        } else {
+            vscode.window.showInformationMessage('No new folders were added. They may already exist or were skipped.');
+        }
+    });
+
+    // Add files and/or folders from Explorer selection to a session (supports multi-select)
+    register('codelensai.addSelectionToSession', async (clickedUri?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+        // Determine the target session. Auto-select if only one exists.
+        let targetSession: Session | undefined;
+        const all = sessionManager.getAllSessions();
+        if (all.length === 1) {
+            targetSession = all[0];
+        } else {
+            targetSession = await selectSession('Select session to add selection to', sessionManager);
+        }
+        if (!targetSession) return;
+
+        // Resolve candidates (clicked or multi-selected). VS Code passes multi-select as 2nd arg.
+        const candidates: vscode.Uri[] = Array.isArray(selectedUris) && selectedUris.length > 0
+            ? selectedUris
+            : (clickedUri ? [clickedUri] : []);
+
+        if (candidates.length === 0) {
+            vscode.window.showInformationMessage('No items selected.');
+            return;
+        }
+
+        // Normalize: only file-scheme, unique by fsPath
+        const uniqueByFsPath = new Map<string, vscode.Uri>();
+        for (const u of candidates) {
+            if (u.scheme !== 'file') continue; // only local FS
+            uniqueByFsPath.set(u.fsPath, u);
+        }
+        const items = Array.from(uniqueByFsPath.values());
+        if (items.length === 0) {
+            vscode.window.showInformationMessage('Only local file system items can be added.');
+            return;
+        }
+
+        let attempted = 0;
+        let added = 0;
+        let skipped = 0;
+
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: `CodeLens AI: Adding selection to session "${targetSession.name}"...`,
+            cancellable: true
+        }, async (progress, token) => {
+            for (let i = 0; i < items.length; i++) {
+                if (token.isCancellationRequested) break;
+                const uri = items[i];
+                const base = path.basename(uri.fsPath);
+                progress.report({ message: `(${i + 1}/${items.length}) ${base}` });
+
+                attempted++;
+                try {
+                    const result = await targetSession.storage.addResource(uri);
+                    if (result) {
+                        added++;
+                    } else {
+                        skipped++;
+                    }
+                } catch (err) {
+                    console.error('[CodeLensAI:addSelectionToSession] Error adding', uri.toString(), err);
+                }
+            }
+        });
+
+        if (added > 0) {
+            sessionManager.persistSessions();
+            await updateCodeBlockDocument(targetSession);
+            codeLensAiProvider.refresh();
+        }
+
+        const summary: string[] = [];
+        summary.push(`Added ${added}/${attempted} item(s)`);
+        if (skipped > 0) summary.push(`Skipped ${skipped}`);
+        vscode.window.showInformationMessage(`${summary.join('. ')} to session "${targetSession.name}".`);
     });
 
     register('codelensai.copyDirectoryStructure', async (item?: SessionItem | ResourceItem) => {
