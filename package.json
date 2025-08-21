@@ -92,7 +92,7 @@
     "submenus": [
       {
         "id": "codelensai.explorerSubmenu",
-        "label": "CodeLens AI"
+        "label": "CodeLens"
       }
     ],
     "configuration": {
@@ -262,7 +262,7 @@
       },
       {
         "command": "codelensai.addSelectionToSession",
-        "title": "Add to Session (Selection)...",
+        "title": "Select Session",
         "icon": "$(add)"
       }
     ],
@@ -281,18 +281,13 @@
           "submenu": "codelensai.explorerSubmenu",
           "when": "resourceScheme == file",
           "group": "navigation@99"
-        },
-        {
-          "command": "codelensai.addFolderToSession",
-          "when": "explorerResourceIsFolder && resourceScheme == file",
-          "group": "navigation@100"
         }
       ],
       "codelensai.explorerSubmenu": [
         {
           "command": "codelensai.addSelectionToSession",
           "when": "resourceScheme == file",
-          "group": "1_add@1"
+          "group": "1_select@1"
         }
       ],
       "view/title": [

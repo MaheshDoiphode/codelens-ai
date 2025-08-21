@@ -18,6 +18,9 @@ let sessionManager: SessionManager;
 let codeLensAiProvider: CodeLensAiProvider;
 let treeView: vscode.TreeView<IntegratorTreeItem>;
 let gitAPI: GitAPI | undefined;
+let extContext: vscode.ExtensionContext;
+const LAST_SESSION_KEY = 'codelensai.lastSessionId';
+let lastSessionId: string | undefined;
 
 /**
  * This method is called when your extension is activated.
@@ -25,6 +28,7 @@ let gitAPI: GitAPI | undefined;
  */
 export async function activate(context: vscode.ExtensionContext) {
     console.log('Activating CodeLens AI...');
+    extContext = context;
 
     try {
         const gitExtension = vscode.extensions.getExtension<GitExtension>('vscode.git');
@@ -51,6 +55,13 @@ export async function activate(context: vscode.ExtensionContext) {
 
     sessionManager = new SessionManager(context);
     sessionManager.loadSessions();
+
+    // Initialize last session context for menus
+    lastSessionId = context.workspaceState.get<string>(LAST_SESSION_KEY);
+    if (lastSessionId && !sessionManager.getSession(lastSessionId)) {
+        lastSessionId = undefined;
+    }
+    await vscode.commands.executeCommand('setContext', 'codelensai.hasLastSession', !!lastSessionId);
 
     codeLensAiProvider = new CodeLensAiProvider(sessionManager);
     treeView = vscode.window.createTreeView('codeLensAiView', { // Updated View ID
@@ -277,6 +288,10 @@ function registerCommands(context: vscode.ExtensionContext) {
             await updateCodeBlockDocument(targetSession);
             codeLensAiProvider.refresh();
             vscode.window.showInformationMessage(`Added ${rootsAdded}/${rootsAttempted} folder(s) to session "${targetSession.name}".`);
+            // Remember last session
+            lastSessionId = targetSession.id;
+            extContext.workspaceState.update(LAST_SESSION_KEY, lastSessionId);
+            await vscode.commands.executeCommand('setContext', 'codelensai.hasLastSession', true);
         } else {
             vscode.window.showInformationMessage('No new folders were added. They may already exist or were skipped.');
         }
@@ -349,6 +364,77 @@ function registerCommands(context: vscode.ExtensionContext) {
             sessionManager.persistSessions();
             await updateCodeBlockDocument(targetSession);
             codeLensAiProvider.refresh();
+            // Remember last session
+            lastSessionId = targetSession.id;
+            extContext.workspaceState.update(LAST_SESSION_KEY, lastSessionId);
+            await vscode.commands.executeCommand('setContext', 'codelensai.hasLastSession', true);
+        }
+
+        const summary: string[] = [];
+        summary.push(`Added ${added}/${attempted} item(s)`);
+        if (skipped > 0) summary.push(`Skipped ${skipped}`);
+        vscode.window.showInformationMessage(`${summary.join('. ')} to session "${targetSession.name}".`);
+    });
+
+    // Quick add to last-used session (no picker)
+    register('codelensai.addSelectionToLastSession', async (clickedUri?: vscode.Uri, selectedUris?: vscode.Uri[]) => {
+        let targetSession: Session | undefined = lastSessionId ? sessionManager.getSession(lastSessionId) : undefined;
+        if (!targetSession) {
+            targetSession = await selectSession('Select session to add selection to', sessionManager);
+        }
+        if (!targetSession) return;
+
+        const candidates: vscode.Uri[] = Array.isArray(selectedUris) && selectedUris.length > 0
+            ? selectedUris
+            : (clickedUri ? [clickedUri] : []);
+        if (candidates.length === 0) {
+            vscode.window.showInformationMessage('No items selected.');
+            return;
+        }
+
+        const uniqueByFsPath = new Map<string, vscode.Uri>();
+        for (const u of candidates) {
+            if (u.scheme !== 'file') continue;
+            uniqueByFsPath.set(u.fsPath, u);
+        }
+        const items = Array.from(uniqueByFsPath.values());
+        if (items.length === 0) {
+            vscode.window.showInformationMessage('Only local file system items can be added.');
+            return;
+        }
+
+        let attempted = 0;
+        let added = 0;
+        let skipped = 0;
+
+        await vscode.window.withProgress({
+            location: vscode.ProgressLocation.Notification,
+            title: `CodeLens AI: Adding selection to session "${targetSession.name}"...`,
+            cancellable: true
+        }, async (progress, token) => {
+            for (let i = 0; i < items.length; i++) {
+                if (token.isCancellationRequested) break;
+                const uri = items[i];
+                const base = path.basename(uri.fsPath);
+                progress.report({ message: `(${i + 1}/${items.length}) ${base}` });
+
+                attempted++;
+                try {
+                    const result = await targetSession.storage.addResource(uri);
+                    if (result) { added++; } else { skipped++; }
+                } catch (err) {
+                    console.error('[CodeLensAI:addSelectionToLastSession] Error adding', uri.toString(), err);
+                }
+            }
+        });
+
+        if (added > 0) {
+            sessionManager.persistSessions();
+            await updateCodeBlockDocument(targetSession);
+            codeLensAiProvider.refresh();
+            lastSessionId = targetSession.id;
+            extContext.workspaceState.update(LAST_SESSION_KEY, lastSessionId);
+            await vscode.commands.executeCommand('setContext', 'codelensai.hasLastSession', true);
         }
 
         const summary: string[] = [];
