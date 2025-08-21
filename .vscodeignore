@@ -11,3 +11,17 @@ node_modules/**
 .vscode-test.mjs
 eslint.config.mjs
 vsc-extension-quickstart.md
+
+# Git repo (main source of bloat)
+.git/**
+
+# Previous builds
+*.vsix
+
+# Not used at runtime
+webview-ui/**
+tree
+
+# Optional (reduce a bit more)
+package-lock.json
+.vscodeignore
